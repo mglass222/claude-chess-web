@@ -1,0 +1,127 @@
+/* CSS Custom Properties for theming */
+:root {
+  --light-square: #d9d7c3;
+  --dark-square: #658047;
+  --bg-color: #2a2a2a;
+  --panel-bg: #1e1e1e;
+  --panel-text: #e0e0e0;
+  --accent: #4a7b9d;
+  --accent-hover: #5a8fb3;
+  --gold: #b58863;
+  --btn-radius: 8px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: var(--bg-color);
+  color: var(--panel-text);
+}
+
+#app-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+#game-layout {
+  display: grid;
+  grid-template-columns: 220px auto 240px;
+  gap: 0;
+  height: 100vh;
+  max-height: 100vh;
+  width: 100%;
+  max-width: 1400px;
+}
+
+#left-panel {
+  background: var(--panel-bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 8px;
+  overflow-y: auto;
+  border-right: 1px solid #333;
+}
+
+#board-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  position: relative;
+}
+
+#board-area {
+  width: 100%;
+  max-width: min(80vh, 700px);
+  aspect-ratio: 1;
+  position: relative;
+}
+
+#below-board {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 10px 0;
+  min-height: 60px;
+}
+
+#right-panel {
+  background: var(--panel-bg);
+  display: flex;
+  flex-direction: column;
+  padding: 10px 8px;
+  overflow: hidden;
+  border-left: 1px solid #333;
+}
+
+/* Responsive */
+@media (max-width: 1000px) {
+  #game-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+  }
+  #left-panel {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    border-right: none;
+    border-bottom: 1px solid #333;
+    padding: 8px;
+    order: -1;
+  }
+  #right-panel {
+    border-left: none;
+    border-top: 1px solid #333;
+    max-height: 200px;
+  }
+  #board-area {
+    max-width: min(90vw, 80vh);
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--panel-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 3px;
+}
