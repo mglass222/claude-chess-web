@@ -9,6 +9,7 @@ export class EngineManager {
     this.onBestMove = null;       // callback(moveUci)
     this._initResolve = null;
     this._initReject = null;
+    this._readyCallback = null;
   }
 
   async init() {
@@ -58,6 +59,10 @@ export class EngineManager {
       if (this._initResolve) {
         this._initResolve();
         this._initResolve = null;
+      } else if (this._readyCallback) {
+        const cb = this._readyCallback;
+        this._readyCallback = null;
+        cb();
       }
       return;
     }
@@ -130,19 +135,16 @@ export class EngineManager {
 
       const { depth } = getDifficultyConfig(difficulty);
 
-      // Set callback for the bestmove response
-      this.onBestMove = (moveUci) => {
-        resolve(moveUci);
-      };
-
-      // Wait for engine to be ready, then search
-      this.worker.postMessage('isready');
-      // The engine will respond with 'readyok', but since we're not
-      // waiting for it, we'll just send the commands
-      setTimeout(() => {
+      // Wait for readyok to ensure the "stop" bestmove has been flushed,
+      // then set the callback and start the search
+      this._readyCallback = () => {
+        this.onBestMove = (moveUci) => {
+          resolve(moveUci);
+        };
         this.worker.postMessage(`position fen ${fen}`);
         this.worker.postMessage(`go depth ${depth}`);
-      }, 50);
+      };
+      this.worker.postMessage('isready');
     });
   }
 
