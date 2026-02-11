@@ -64,7 +64,9 @@ export class GameController {
     this.boardView = new BoardView(boardArea);
     this.boardView.applyTheme(this.settings.theme);
 
-    this.evalBar = new EvalBar(leftPanel);
+    const boardColumn = document.getElementById('board-column');
+    this.evalBar = new EvalBar(boardColumn);
+    boardColumn.insertBefore(this.evalBar.el, boardArea);
 
     // Left panel buttons
     this._buildLeftPanel(leftPanel);

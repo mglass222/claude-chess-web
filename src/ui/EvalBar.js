@@ -48,9 +48,9 @@ export class EvalBar {
       if (i === 0) continue;
       const tick = document.createElement('div');
       tick.className = 'eval-tick';
-      // Position: 0cp = 50%, +1000cp = 0% (top for white perspective), -1000cp = 100%
-      const pct = 50 - (i * 5); // each pawn = 5%
-      tick.style.top = `${pct}%`;
+      // Position: 0cp = 50%, +1000cp = 100% (right/white side), -1000cp = 0% (left/black side)
+      const pct = 50 + (i * 5);
+      tick.style.left = `${pct}%`;
       this.tickContainer.appendChild(tick);
     }
     // Center line
@@ -122,8 +122,8 @@ export class EvalBar {
     const clamped = Math.max(-1000, Math.min(1000, cp));
     // White percentage: 50% at 0, 100% at +1000, 0% at -1000
     const whitePct = 50 + (clamped / 1000) * 50;
-    this.whiteSection.style.height = `${whitePct}%`;
-    this.blackSection.style.height = `${100 - whitePct}%`;
+    this.whiteSection.style.width = `${whitePct}%`;
+    this.blackSection.style.width = `${100 - whitePct}%`;
   }
 
   _updateLabel() {
