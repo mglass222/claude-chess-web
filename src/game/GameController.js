@@ -64,9 +64,15 @@ export class GameController {
     this.boardView = new BoardView(boardArea);
     this.boardView.applyTheme(this.settings.theme);
 
+    // Create a row wrapper for eval bar + board
     const boardColumn = document.getElementById('board-column');
-    this.evalBar = new EvalBar(boardColumn);
-    boardColumn.insertBefore(this.evalBar.el, boardArea);
+    const boardRow = document.createElement('div');
+    boardRow.id = 'board-row';
+    boardColumn.insertBefore(boardRow, boardArea);
+    boardRow.appendChild(boardArea);
+
+    this.evalBar = new EvalBar(boardRow);
+    boardRow.insertBefore(this.evalBar.el, boardArea);
 
     // Left panel buttons
     this._buildLeftPanel(leftPanel);
