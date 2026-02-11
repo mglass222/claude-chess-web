@@ -418,8 +418,8 @@ export class GameController {
     // Record in history
     this.history.addMove(result.san, this.state.fen);
 
-    // Animate the move
-    await this.boardView.animateMove(result.from, result.to, this.state.board);
+    // Update board immediately for player moves (no animation needed)
+    this.boardView.updatePosition(this.state.board);
 
     // Update last move highlight
     this.boardView.setLastMove(result.from, result.to);
