@@ -66,6 +66,11 @@ export class GameController {
 
     // Create a row wrapper for eval bar + board
     const boardColumn = document.getElementById('board-column');
+
+    // Opponent info (above board)
+    this._opponentInfo = this._buildPlayerInfo('opponent');
+    boardColumn.insertBefore(this._opponentInfo, boardArea);
+
     const boardRow = document.createElement('div');
     boardRow.id = 'board-row';
     boardColumn.insertBefore(boardRow, boardArea);
@@ -73,6 +78,10 @@ export class GameController {
 
     this.evalBar = new EvalBar(boardRow);
     boardRow.insertBefore(this.evalBar.el, boardArea);
+
+    // Player info (below board)
+    this._playerInfo = this._buildPlayerInfo('player');
+    boardColumn.insertBefore(this._playerInfo, document.getElementById('below-board'));
 
     // Left panel buttons
     this._buildLeftPanel(leftPanel);
@@ -239,6 +248,8 @@ export class GameController {
     this._leftPanelEl.style.display = 'none';
     this._hintBtnEl.style.display = 'none';
     this._replayEl.style.display = 'none';
+    this._opponentInfo.style.display = 'none';
+    this._playerInfo.style.display = 'none';
     this.gameOverOverlay.hide();
     this.analysisGraph.hide();
   }
@@ -269,6 +280,9 @@ export class GameController {
 
     // Set engine difficulty
     this.engine.setDifficulty(this.state.difficulty);
+
+    // Update player info
+    this._updatePlayerInfos();
 
     // Start analysis
     this._startAnalysis();
@@ -640,6 +654,46 @@ export class GameController {
         this.moveList.render(this.history);
         break;
     }
+  }
+
+  // --- Player Info ---
+
+  _buildPlayerInfo(role) {
+    const el = document.createElement('div');
+    el.className = `player-info ${role}`;
+    el.style.display = 'none';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'player-avatar';
+
+    const name = document.createElement('span');
+    name.className = 'player-name';
+
+    el.appendChild(avatar);
+    el.appendChild(name);
+    return el;
+  }
+
+  _updatePlayerInfos() {
+    const isWhite = this.state.playerColor === 'w';
+    const difficulty = this.state.difficulty;
+
+    // Player info
+    const playerAvatar = this._playerInfo.querySelector('.player-avatar');
+    const playerName = this._playerInfo.querySelector('.player-name');
+    playerAvatar.textContent = isWhite ? 'W' : 'B';
+    playerAvatar.className = `player-avatar ${isWhite ? 'white-piece' : 'black-piece'}`;
+    playerName.textContent = 'You';
+
+    // Opponent info
+    const opponentAvatar = this._opponentInfo.querySelector('.player-avatar');
+    const opponentName = this._opponentInfo.querySelector('.player-name');
+    opponentAvatar.textContent = isWhite ? 'B' : 'W';
+    opponentAvatar.className = `player-avatar ${isWhite ? 'black-piece' : 'white-piece'}`;
+    opponentName.textContent = `Stockfish (Level ${difficulty})`;
+
+    this._playerInfo.style.display = 'flex';
+    this._opponentInfo.style.display = 'flex';
   }
 
   // --- Helpers ---

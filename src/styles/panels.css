@@ -194,6 +194,43 @@
   font-weight: 600;
 }
 
+/* Player Info */
+.player-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  margin-left: 52px; /* align with board (eval bar width + gap) */
+}
+
+.player-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.player-avatar.white-piece {
+  background: #f0f0f0;
+  color: #222;
+}
+
+.player-avatar.black-piece {
+  background: #323232;
+  color: #eee;
+}
+
+.player-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--panel-text);
+}
+
 /* Analysis Graph */
 .analysis-graph-overlay {
   position: absolute;
