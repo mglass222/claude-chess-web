@@ -113,6 +113,7 @@ export class GameController {
       { id: 'settings', label: 'Settings', action: () => this._openSettings() },
       { id: 'save', label: 'Save', action: () => this._saveGame() },
       { id: 'load', label: 'Load', action: () => this._loadGame() },
+      { id: 'hint', label: 'Hint', action: () => this._toggleHint() },
     ];
 
     for (const { id, label, action } of buttons) {
@@ -122,6 +123,10 @@ export class GameController {
       btn.textContent = label;
       btn.addEventListener('click', action);
       this._leftPanelEl.appendChild(btn);
+      if (id === 'hint') {
+        this._hintBtnEl = btn;
+        btn.style.display = 'none';
+      }
     }
 
     // Depth slider
@@ -159,14 +164,6 @@ export class GameController {
   }
 
   _buildBelowBoard(container) {
-    // Hint button
-    this._hintBtnEl = document.createElement('button');
-    this._hintBtnEl.className = 'hint-btn';
-    this._hintBtnEl.textContent = 'Hint';
-    this._hintBtnEl.style.display = 'none';
-    this._hintBtnEl.addEventListener('click', () => this._toggleHint());
-    container.appendChild(this._hintBtnEl);
-
     // Replay controls (shown after game over)
     this._replayEl = document.createElement('div');
     this._replayEl.className = 'replay-controls';
