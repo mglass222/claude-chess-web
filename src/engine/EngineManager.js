@@ -231,6 +231,11 @@ export class EngineManager {
   stopAnalysis() {
     if (!this.ready) return;
     this.analyzing = false;
+    // Clear any pending analysis timeout to prevent stale commands
+    if (this._analysisTimeoutId) {
+      clearTimeout(this._analysisTimeoutId);
+      this._analysisTimeoutId = null;
+    }
     this.worker.postMessage('stop');
   }
 

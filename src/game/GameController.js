@@ -482,11 +482,11 @@ export class GameController {
       return;
     }
 
-    // If it's the AI's turn, schedule its move (don't start analysis -
-    // the engine would just be stopped 400ms later, and the heavy WASM
-    // computation starves the audio thread, delaying the move sound).
-    // Analysis restarts after the AI move completes.
+    // If it's the AI's turn, stop any running analysis immediately and
+    // schedule the AI move. Stopping now prevents stale analysis commands
+    // from racing with the upcoming getMove() call.
     if (!this.state.isPlayerTurn) {
+      this.engine.stopAnalysis();
       this._setTimeout(() => this._makeAIMove(), 400);
     } else {
       this._startAnalysis();
@@ -502,7 +502,11 @@ export class GameController {
     this.engine.stopAnalysis();
 
     const moveUci = await this.engine.getMove(this.state.fen, this.state.difficulty);
-    if (!moveUci) return;
+    if (!moveUci || moveUci === '(none)') {
+      console.warn('Engine failed to produce a move, retrying...');
+      this._setTimeout(() => this._makeAIMove(), 500);
+      return;
+    }
 
     // Parse UCI move (e.g., "e2e4", "e7e8q")
     const from = moveUci.substring(0, 2);
@@ -513,7 +517,11 @@ export class GameController {
     if (promotion) moveObj.promotion = promotion;
 
     const result = this.state.makeMove(moveObj);
-    if (!result) return;
+    if (!result) {
+      console.warn('Engine produced illegal move:', moveUci, 'retrying...');
+      this._setTimeout(() => this._makeAIMove(), 500);
+      return;
+    }
 
     // Play sound
     if (this.state.isCheck()) {
