@@ -97,6 +97,9 @@ export class BoardView {
       }
     }
 
+    // Prevent right-click context menu on the board
+    this.boardEl.addEventListener('contextmenu', (e) => e.preventDefault());
+
     this.boardEl.appendChild(this.svgOverlay);
     this.container.appendChild(this.boardEl);
 
@@ -366,6 +369,7 @@ export class BoardView {
   // Mouse / touch input
   _onMouseDown(e, square) {
     if (this._animating) return;
+    if (e.button !== 0) return; // only allow left-click
     e.preventDefault();
 
     const pieceEl = this.pieces[square];
