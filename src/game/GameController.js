@@ -11,7 +11,7 @@ import { SetupScreen } from '../ui/SetupScreen.js';
 import { GameOverOverlay } from '../ui/GameOverOverlay.js';
 import { SettingsDialog } from '../ui/SettingsDialog.js';
 import { SoundManager } from '../ui/SoundManager.js';
-import { DEFAULTS, ANALYSIS_DEPTH_MIN, ANALYSIS_DEPTH_MAX } from '../config.js';
+import { DEFAULTS, ANALYSIS_DEPTH_MIN, ANALYSIS_DEPTH_MAX, evalToCp } from '../config.js';
 
 export class GameController {
   constructor() {
@@ -45,6 +45,12 @@ export class GameController {
 
     // Replay controls
     this._replayEl = null;
+
+    // Bound handlers for cleanup
+    this._boundKeyboard = (e) => this._handleKeyboard(e);
+
+    // Tracked timeouts for cleanup
+    this._pendingTimeouts = [];
   }
 
   async init() {
@@ -159,7 +165,7 @@ export class GameController {
       // Restart analysis with new depth
       if (this.state.analyzing && this.state.phase === 'playing') {
         this.engine.stopAnalysis();
-        setTimeout(() => {
+        this._setTimeout(() => {
           this.engine.startAnalysis(this.state.fen, newDepth);
         }, 100);
       }
@@ -238,7 +244,7 @@ export class GameController {
     this.engine.onAnalysisUpdate = (info) => this._handleAnalysisUpdate(info);
 
     // Keyboard navigation
-    document.addEventListener('keydown', (e) => this._handleKeyboard(e));
+    document.addEventListener('keydown', this._boundKeyboard);
   }
 
   // --- Game Flow ---
@@ -289,11 +295,12 @@ export class GameController {
 
     // If player is black, AI makes first move
     if (this.state.playerColor === 'b') {
-      setTimeout(() => this._makeAIMove(), 300);
+      this._setTimeout(() => this._makeAIMove(), 300);
     }
   }
 
   _restart() {
+    this._clearPendingTimeouts();
     this.gameOverOverlay.hide();
     this.analysisGraph.hide();
     this.state.resetGame();
@@ -318,11 +325,12 @@ export class GameController {
     this._startAnalysis();
 
     if (this.state.playerColor === 'b') {
-      setTimeout(() => this._makeAIMove(), 300);
+      this._setTimeout(() => this._makeAIMove(), 300);
     }
   }
 
   _newGame() {
+    this._clearPendingTimeouts();
     this.gameOverOverlay.hide();
     this.analysisGraph.hide();
     this.engine.stopAnalysis();
@@ -410,15 +418,9 @@ export class GameController {
     this.boardView.clearLegalMoves();
 
     // Store current eval before making the move
-    if (this.state.evaluation) {
-      const cp = this.state.evaluation.cp;
-      const mate = this.state.evaluation.mate;
-      if (mate !== null && mate !== undefined) {
-        const cpVal = mate > 0 ? (10000 - Math.abs(mate) * 100) : (-10000 + Math.abs(mate) * 100);
-        this.state.addEvaluation(cpVal);
-      } else if (cp !== null && cp !== undefined) {
-        this.state.addEvaluation(cp);
-      }
+    const cpVal = evalToCp(this.state.evaluation);
+    if (cpVal !== null) {
+      this.state.addEvaluation(cpVal);
     }
 
     // Make the move in chess.js
@@ -461,10 +463,14 @@ export class GameController {
       return;
     }
 
-    // Restart analysis and make AI move
-    this._startAnalysis();
+    // If it's the AI's turn, schedule its move (don't start analysis -
+    // the engine would just be stopped 400ms later, and the heavy WASM
+    // computation starves the audio thread, delaying the move sound).
+    // Analysis restarts after the AI move completes.
     if (!this.state.isPlayerTurn) {
-      setTimeout(() => this._makeAIMove(), 200);
+      this._setTimeout(() => this._makeAIMove(), 400);
+    } else {
+      this._startAnalysis();
     }
   }
 
@@ -480,15 +486,9 @@ export class GameController {
     if (!moveUci) return;
 
     // Store current eval
-    if (this.state.evaluation) {
-      const cp = this.state.evaluation.cp;
-      const mate = this.state.evaluation.mate;
-      if (mate !== null && mate !== undefined) {
-        const cpVal = mate > 0 ? (10000 - Math.abs(mate) * 100) : (-10000 + Math.abs(mate) * 100);
-        this.state.addEvaluation(cpVal);
-      } else if (cp !== null && cp !== undefined) {
-        this.state.addEvaluation(cp);
-      }
+    const cpVal = evalToCp(this.state.evaluation);
+    if (cpVal !== null) {
+      this.state.addEvaluation(cpVal);
     }
 
     // Parse UCI move (e.g., "e2e4", "e7e8q")
@@ -696,6 +696,32 @@ export class GameController {
     this._opponentInfo.style.display = 'flex';
   }
 
+  // --- Lifecycle ---
+
+  _setTimeout(fn, delay) {
+    const id = setTimeout(() => {
+      this._pendingTimeouts = this._pendingTimeouts.filter(t => t !== id);
+      fn();
+    }, delay);
+    this._pendingTimeouts.push(id);
+    return id;
+  }
+
+  _clearPendingTimeouts() {
+    for (const id of this._pendingTimeouts) {
+      clearTimeout(id);
+    }
+    this._pendingTimeouts = [];
+  }
+
+  destroy() {
+    this._clearPendingTimeouts();
+    document.removeEventListener('keydown', this._boundKeyboard);
+    this.boardView.destroy();
+    this.evalBar.destroy();
+    this.engine.destroy();
+  }
+
   // --- Helpers ---
 
   _getPieceAt(square) {
@@ -763,7 +789,7 @@ export class GameController {
       if (this.state.phase === 'playing') {
         this._startAnalysis();
         if (!this.state.isPlayerTurn) {
-          setTimeout(() => this._makeAIMove(), 300);
+          this._setTimeout(() => this._makeAIMove(), 300);
         }
       }
     } catch (e) {

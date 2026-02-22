@@ -154,6 +154,10 @@ export class EvalBar {
   }
 
   reset() {
+    if (this._rafId) {
+      cancelAnimationFrame(this._rafId);
+      this._rafId = null;
+    }
     this._currentCp = 0;
     this._targetCp = 0;
     this._isMate = false;
@@ -162,5 +166,13 @@ export class EvalBar {
     this._updateBar(0);
     this.scoreLabel.textContent = '0.0';
     this.scoreLabel.className = 'eval-score white-advantage';
+  }
+
+  destroy() {
+    if (this._rafId) {
+      cancelAnimationFrame(this._rafId);
+      this._rafId = null;
+    }
+    this._animating = false;
   }
 }

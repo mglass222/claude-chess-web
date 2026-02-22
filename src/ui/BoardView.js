@@ -27,6 +27,12 @@ export class BoardView {
     this._animating = false;
     this._animationResolve = null;
 
+    // Bound handlers for cleanup
+    this._boundMouseMove = (e) => this._onMouseMove(e);
+    this._boundMouseUp = (e) => this._onMouseUp(e);
+    this._boundTouchMove = (e) => this._onTouchMove(e);
+    this._boundTouchEnd = (e) => this._onTouchEnd(e);
+
     this._build();
   }
 
@@ -95,13 +101,13 @@ export class BoardView {
     this.container.appendChild(this.boardEl);
 
     // Global mouse events for drag
-    document.addEventListener('mousemove', (e) => this._onMouseMove(e));
-    document.addEventListener('mouseup', (e) => this._onMouseUp(e));
+    document.addEventListener('mousemove', this._boundMouseMove);
+    document.addEventListener('mouseup', this._boundMouseUp);
 
     // Touch support
     this.boardEl.addEventListener('touchstart', (e) => this._onTouchStart(e), { passive: false });
-    document.addEventListener('touchmove', (e) => this._onTouchMove(e), { passive: false });
-    document.addEventListener('touchend', (e) => this._onTouchEnd(e));
+    document.addEventListener('touchmove', this._boundTouchMove, { passive: false });
+    document.addEventListener('touchend', this._boundTouchEnd);
   }
 
   // Render pieces from chess.js board array
@@ -142,25 +148,44 @@ export class BoardView {
     this.pieces[square] = img;
   }
 
-  // Update the board to match a position without full rebuild (for moves)
+  // Update the board to match a position, only changing squares that differ
   updatePosition(board) {
-    // Remove all current pieces
+    // Build a map of what the new board looks like: square -> "wP", "bK", etc. or null
+    const desired = {};
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const file = FILES[col];
+        const rank = RANKS[7 - row];
+        const squareName = file + rank;
+        const piece = board[row][col];
+        desired[squareName] = piece ? `${piece.color}${piece.type.toUpperCase()}` : null;
+      }
+    }
+
+    // Build a map of current pieces on the board: square -> "wP", "bK", etc.
+    const current = {};
     for (const sq in this.pieces) {
       if (this.pieces[sq]) {
+        const alt = this.pieces[sq].alt; // stored as "wP", "bK", etc.
+        current[sq] = alt;
+      }
+    }
+
+    // Remove pieces that shouldn't be there or have changed
+    for (const sq in current) {
+      if (current[sq] !== desired[sq]) {
         this.pieces[sq].remove();
         delete this.pieces[sq];
       }
     }
 
-    for (let row = 0; row < 8; row++) {
-      for (let col = 0; col < 8; col++) {
-        const piece = board[row][col];
-        if (piece) {
-          const file = FILES[col];
-          const rank = RANKS[7 - row];
-          const squareName = file + rank;
-          this._placePiece(squareName, piece.color, piece.type);
-        }
+    // Add pieces that are missing
+    for (const sq in desired) {
+      if (desired[sq] && !this.pieces[sq]) {
+        const piece = desired[sq];
+        const color = piece[0];
+        const type = piece[1];
+        this._placePiece(sq, color, type);
       }
     }
   }
@@ -480,6 +505,14 @@ export class BoardView {
     if (target && target !== this._dragFrom && this.onSquareClick) {
       this.onSquareClick(target);
     }
+  }
+
+  destroy() {
+    document.removeEventListener('mousemove', this._boundMouseMove);
+    document.removeEventListener('mouseup', this._boundMouseUp);
+    document.removeEventListener('touchmove', this._boundTouchMove);
+    document.removeEventListener('touchend', this._boundTouchEnd);
+    this._cleanupDrag();
   }
 
   applyTheme(themeName) {

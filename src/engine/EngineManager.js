@@ -1,5 +1,7 @@
 import { getDifficultyConfig } from '../config.js';
 
+const ENGINE_MOVE_TIMEOUT = 15000; // 15s timeout for getMove
+
 export class EngineManager {
   constructor() {
     this.worker = null;
@@ -10,6 +12,8 @@ export class EngineManager {
     this._initResolve = null;
     this._initReject = null;
     this._readyCallback = null;
+    this._analysisTimeoutId = null;
+    this._moveTimeoutId = null;
   }
 
   async init() {
@@ -34,6 +38,11 @@ export class EngineManager {
           if (this._initReject) {
             this._initReject(err);
             this._initReject = null;
+          }
+          // Handle post-init errors: resolve pending move with null
+          if (this.onBestMove) {
+            this.onBestMove(null);
+            this.onBestMove = null;
           }
         };
 
@@ -94,14 +103,14 @@ export class EngineManager {
 
     for (let i = 0; i < tokens.length; i++) {
       if (tokens[i] === 'depth') {
-        info.depth = parseInt(tokens[i + 1]);
+        info.depth = parseInt(tokens[i + 1], 10);
       }
       if (tokens[i] === 'score') {
         if (tokens[i + 1] === 'cp') {
-          info.cp = parseInt(tokens[i + 2]);
+          info.cp = parseInt(tokens[i + 2], 10);
           info.mate = null;
         } else if (tokens[i + 1] === 'mate') {
-          info.mate = parseInt(tokens[i + 2]);
+          info.mate = parseInt(tokens[i + 2], 10);
           info.cp = null;
         }
       }
@@ -135,10 +144,23 @@ export class EngineManager {
 
       const { depth } = getDifficultyConfig(difficulty);
 
+      // Timeout safety: resolve with null if engine doesn't respond
+      this._moveTimeoutId = setTimeout(() => {
+        this._moveTimeoutId = null;
+        console.warn('Engine move timed out');
+        this.onBestMove = null;
+        this.worker.postMessage('stop');
+        resolve(null);
+      }, ENGINE_MOVE_TIMEOUT);
+
       // Wait for readyok to ensure the "stop" bestmove has been flushed,
       // then set the callback and start the search
       this._readyCallback = () => {
         this.onBestMove = (moveUci) => {
+          if (this._moveTimeoutId) {
+            clearTimeout(this._moveTimeoutId);
+            this._moveTimeoutId = null;
+          }
           resolve(moveUci);
         };
         this.worker.postMessage(`position fen ${fen}`);
@@ -154,7 +176,12 @@ export class EngineManager {
     this.analyzing = true;
     this.worker.postMessage('stop');
 
-    setTimeout(() => {
+    if (this._analysisTimeoutId) {
+      clearTimeout(this._analysisTimeoutId);
+    }
+    this._analysisTimeoutId = setTimeout(() => {
+      this._analysisTimeoutId = null;
+      if (!this.ready || !this.worker) return;
       this.worker.postMessage(`position fen ${fen}`);
       this.worker.postMessage(`go depth ${maxDepth}`);
     }, 50);
@@ -167,6 +194,14 @@ export class EngineManager {
   }
 
   destroy() {
+    if (this._analysisTimeoutId) {
+      clearTimeout(this._analysisTimeoutId);
+      this._analysisTimeoutId = null;
+    }
+    if (this._moveTimeoutId) {
+      clearTimeout(this._moveTimeoutId);
+      this._moveTimeoutId = null;
+    }
     if (this.worker) {
       this.worker.postMessage('quit');
       this.worker.terminate();

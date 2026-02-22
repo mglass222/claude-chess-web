@@ -44,6 +44,19 @@ export const EVAL_BAR_ANIMATION_DURATION = 300; // ms
 export const ANALYSIS_DEPTH_MIN = 16;
 export const ANALYSIS_DEPTH_MAX = 22;
 
+// Convert evaluation (with cp/mate) to a centipawn value for graphing
+export function evalToCp(evaluation) {
+  if (!evaluation) return null;
+  const { cp, mate } = evaluation;
+  if (mate != null) {
+    return mate > 0 ? (10000 - Math.abs(mate) * 100) : (-10000 + Math.abs(mate) * 100);
+  }
+  if (cp != null) {
+    return cp;
+  }
+  return null;
+}
+
 export const COLORS = {
   darkBlue: '#4a7b9d',
   mutedGold: '#b58863',
