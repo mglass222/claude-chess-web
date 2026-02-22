@@ -43,8 +43,14 @@ export class GameController {
     // Hint button
     this._hintBtnEl = null;
 
+    // Take Back button
+    this._takeBackBtnEl = null;
+
     // Replay controls
     this._replayEl = null;
+
+    // Analysis cancel flag
+    this._cancelAnalysis = false;
 
     // Bound handlers for cleanup
     this._boundKeyboard = (e) => this._handleKeyboard(e);
@@ -113,8 +119,10 @@ export class GameController {
       console.warn('Engine failed to initialize:', e);
     }
 
-    // Show setup screen
-    this._showSetup();
+    // Auto-start game with saved/default settings
+    this.state.playerColor = this.settings.playerColor;
+    this.state.difficulty = this.settings.difficulty;
+    this._startGame();
   }
 
   _buildLeftPanel(container) {
@@ -124,11 +132,13 @@ export class GameController {
 
     const buttons = [
       { id: 'restart', label: 'Restart', action: () => this._restart() },
+      { id: 'take-back', label: 'Take Back', action: () => this._takeBack() },
       { id: 'new-game', label: 'New Game', action: () => this._newGame() },
       { id: 'settings', label: 'Settings', action: () => this._openSettings() },
       { id: 'save', label: 'Save', action: () => this._saveGame() },
       { id: 'load', label: 'Load', action: () => this._loadGame() },
       { id: 'hint', label: 'Hint', action: () => this._toggleHint() },
+      { id: 'resign', label: 'Resign', action: () => this._resign() },
     ];
 
     for (const { id, label, action } of buttons) {
@@ -140,6 +150,14 @@ export class GameController {
       this._leftPanelEl.appendChild(btn);
       if (id === 'hint') {
         this._hintBtnEl = btn;
+        btn.style.display = 'none';
+      }
+      if (id === 'take-back') {
+        this._takeBackBtnEl = btn;
+        btn.style.display = 'none';
+      }
+      if (id === 'resign') {
+        this._resignBtnEl = btn;
         btn.style.display = 'none';
       }
     }
@@ -207,18 +225,28 @@ export class GameController {
     // Move list clicks
     this.moveList.onMoveClick = (idx) => this._goToMoveIndex(idx);
 
-    // Setup screen
+    // Setup screen (new game dialog)
     this.setupScreen.onStart = ({ color, difficulty }) => {
       this.state.playerColor = color;
       this.state.difficulty = difficulty;
+      this.settings.playerColor = color;
+      this.settings.difficulty = difficulty;
+      this._saveSettings();
       this._startGame();
     };
 
     // Game over overlay
     this.gameOverOverlay.onRestart = () => this._restart();
     this.gameOverOverlay.onNewGame = () => this._newGame();
-    this.gameOverOverlay.onAnalyze = () => {
-      this.analysisGraph.toggle(this.state.moveEvaluations);
+    this.gameOverOverlay.onAnalyze = (movetimeMs) => this._runPostGameAnalysis(movetimeMs);
+
+    // Analysis graph
+    this.analysisGraph.onMoveClick = (idx) => {
+      this._goToMoveIndex(idx);
+      this.analysisGraph.setHighlight(idx);
+    };
+    this.analysisGraph.onCancel = () => {
+      this._cancelAnalysis = true;
     };
 
     // Settings dialog
@@ -249,19 +277,15 @@ export class GameController {
 
   // --- Game Flow ---
 
-  _showSetup() {
-    this.setupScreen.show();
-    this._leftPanelEl.style.display = 'none';
-    this._hintBtnEl.style.display = 'none';
-    this._replayEl.style.display = 'none';
-    this._opponentInfo.style.display = 'none';
-    this._playerInfo.style.display = 'none';
-    this.gameOverOverlay.hide();
-    this.analysisGraph.hide();
+  _showNewGameDialog() {
+    this.setupScreen.show(this.state.playerColor, this.state.difficulty);
   }
 
   _startGame() {
     this.setupScreen.hide();
+    this.gameOverOverlay.hide();
+    this.analysisGraph.hide();
+    this.state.resetGame();
     this.state.startGame();
     this.history.clear();
     this.history.setInitialFen(this.state.fen);
@@ -275,6 +299,9 @@ export class GameController {
     // Show UI elements
     this._leftPanelEl.style.display = 'flex';
     this._hintBtnEl.style.display = 'block';
+    this._takeBackBtnEl.style.display = 'block';
+    this._takeBackBtnEl.disabled = true;
+    this._resignBtnEl.style.display = 'block';
     this._replayEl.style.display = 'none';
 
     // Reset eval bar
@@ -300,6 +327,7 @@ export class GameController {
   }
 
   _restart() {
+    this._cancelAnalysis = true;
     this._clearPendingTimeouts();
     this.gameOverOverlay.hide();
     this.analysisGraph.hide();
@@ -319,6 +347,9 @@ export class GameController {
     this.moveList.clear();
     this._hintBtnEl.style.display = 'block';
     this._hintBtnEl.textContent = 'Hint';
+    this._takeBackBtnEl.style.display = 'block';
+    this._resignBtnEl.style.display = 'block';
+    this._takeBackBtnEl.disabled = true;
     this._replayEl.style.display = 'none';
 
     this.engine.setDifficulty(this.state.difficulty);
@@ -330,19 +361,10 @@ export class GameController {
   }
 
   _newGame() {
+    this._cancelAnalysis = true;
     this._clearPendingTimeouts();
-    this.gameOverOverlay.hide();
-    this.analysisGraph.hide();
     this.engine.stopAnalysis();
-    this.state.newGame();
-    this.history.clear();
-    this.boardView.setSelected(null);
-    this.boardView.setLastMove(null, null);
-    this.boardView.setCheck(null);
-    this.boardView.clearHintArrow();
-    this.evalBar.reset();
-    this.moveList.clear();
-    this._showSetup();
+    this._showNewGameDialog();
   }
 
   // --- Move Handling ---
@@ -417,12 +439,6 @@ export class GameController {
     this.boardView.setSelected(null);
     this.boardView.clearLegalMoves();
 
-    // Store current eval before making the move
-    const cpVal = evalToCp(this.state.evaluation);
-    if (cpVal !== null) {
-      this.state.addEvaluation(cpVal);
-    }
-
     // Make the move in chess.js
     const result = this.state.makeMove(moveObj);
     if (!result) return; // illegal move
@@ -450,6 +466,9 @@ export class GameController {
 
     // Update move list
     this.moveList.render(this.history);
+
+    // Enable take back
+    this._takeBackBtnEl.disabled = false;
 
     // Reset hint
     this.state.showingHint = false;
@@ -484,12 +503,6 @@ export class GameController {
 
     const moveUci = await this.engine.getMove(this.state.fen, this.state.difficulty);
     if (!moveUci) return;
-
-    // Store current eval
-    const cpVal = evalToCp(this.state.evaluation);
-    if (cpVal !== null) {
-      this.state.addEvaluation(cpVal);
-    }
 
     // Parse UCI move (e.g., "e2e4", "e7e8q")
     const from = moveUci.substring(0, 2);
@@ -535,8 +548,120 @@ export class GameController {
   _handleGameOver() {
     this.engine.stopAnalysis();
     this._hintBtnEl.style.display = 'none';
+    this._takeBackBtnEl.style.display = 'none';
+    this._resignBtnEl.style.display = 'none';
     this._replayEl.style.display = 'flex';
-    this.gameOverOverlay.show(this.state.winner);
+    this.gameOverOverlay.show(this.state.winner, !!this.state.analysisResults);
+  }
+
+  _resign() {
+    if (this.state.phase !== 'playing') return;
+    this._clearPendingTimeouts();
+    this.state.phase = 'over';
+    this.state.winner = this.state.playerColor === 'w' ? 'Black' : 'White';
+    this._handleGameOver();
+  }
+
+  async _runPostGameAnalysis(movetime) {
+    // If cached results exist, show graph immediately
+    if (this.state.analysisResults) {
+      this.gameOverOverlay.hide();
+      this.analysisGraph.showGraph(this.state.analysisResults.evaluations);
+      this.analysisGraph.setHighlight(this.history.getCurrentViewIndex());
+      return;
+    }
+
+    // Hide game-over, show progress
+    this.gameOverOverlay.hide();
+    this.engine.stopAnalysis();
+    this._cancelAnalysis = false;
+
+    this.analysisGraph.showProgress();
+
+    const moves = this.history.moves;
+    const total = moves.length;
+    const evaluations = [];
+
+    for (let i = 0; i < total; i++) {
+      if (this._cancelAnalysis) {
+        this.analysisGraph.hide();
+        this.gameOverOverlay.show(this.state.winner, false);
+        return;
+      }
+
+      this.analysisGraph.updateProgress(i + 1, total);
+
+      const fen = moves[i].fen;
+      const result = await this.engine.analyzePosition(fen, movetime);
+
+      if (this._cancelAnalysis) {
+        this.analysisGraph.hide();
+        this.gameOverOverlay.show(this.state.winner, false);
+        return;
+      }
+
+      if (result) {
+        // Normalize to White's POV
+        let cpVal = evalToCp(result);
+        if (cpVal !== null) {
+          // Engine reports from side-to-move's perspective
+          // Parse whose turn it is from the FEN
+          const turnFromFen = fen.split(' ')[1];
+          if (turnFromFen === 'b') cpVal = -cpVal;
+        }
+        evaluations.push(cpVal);
+      } else {
+        evaluations.push(null);
+      }
+    }
+
+    // Store results and show graph
+    this.state.analysisResults = { evaluations, movetime };
+    this.analysisGraph.showGraph(evaluations);
+    this.analysisGraph.setHighlight(this.history.getCurrentViewIndex());
+  }
+
+  _takeBack() {
+    if (this.state.phase !== 'playing') return;
+    if (this.history.length === 0) return;
+    if (!this.history.isAtCurrentPosition()) return;
+
+    // Clear pending timeouts (cancel scheduled AI move)
+    this._clearPendingTimeouts();
+    this.engine.stopAnalysis();
+
+    // Determine how many half-moves to undo
+    const undoCount = this.state.isPlayerTurn ? 2 : 1;
+
+    for (let i = 0; i < undoCount; i++) {
+      if (this.history.length === 0) break;
+      this.state.undoMove();
+      this.history.removeLast();
+    }
+
+    // Update board
+    this.boardView.updatePosition(this.state.board);
+
+    // Clear last move highlight (history doesn't store from/to squares)
+    this.boardView.setLastMove(null, null);
+
+    // Update check highlight
+    this._updateCheckHighlight();
+
+    // Clear hint
+    this.state.showingHint = false;
+    this.state.bestMove = null;
+    this.boardView.clearHintArrow();
+    this._hintBtnEl.textContent = 'Hint';
+
+    // Update move list
+    this.moveList.render(this.history);
+
+    // Disable take back if no moves left
+    this._takeBackBtnEl.disabled = this.history.length === 0;
+
+    // Restart analysis
+    this._startAnalysis();
   }
 
   // --- Analysis ---
@@ -609,6 +734,9 @@ export class GameController {
     }
 
     this.moveList.render(this.history);
+    if (this.analysisGraph.visible) {
+      this.analysisGraph.setHighlight(this.history.getCurrentViewIndex());
+    }
   }
 
   _goToMoveIndex(idx) {
@@ -619,6 +747,9 @@ export class GameController {
       this.boardView.updatePosition(this.state.board);
     }
     this.moveList.render(this.history);
+    if (this.analysisGraph.visible) {
+      this.analysisGraph.setHighlight(idx);
+    }
   }
 
   _showPositionFromFen(fen) {
@@ -645,6 +776,9 @@ export class GameController {
           const fen = this.history.goToStart();
           if (fen) this._showPositionFromFen(fen);
           this.moveList.render(this.history);
+          if (this.analysisGraph.visible) {
+            this.analysisGraph.setHighlight(this.history.getCurrentViewIndex());
+          }
         }
         break;
       case 'End':
@@ -652,6 +786,9 @@ export class GameController {
         this.history.goToEnd();
         this.boardView.updatePosition(this.state.board);
         this.moveList.render(this.history);
+        if (this.analysisGraph.visible) {
+          this.analysisGraph.setHighlight(this.history.getCurrentViewIndex());
+        }
         break;
     }
   }
@@ -783,6 +920,9 @@ export class GameController {
       this.moveList.render(this.history);
       this._leftPanelEl.style.display = 'flex';
       this._hintBtnEl.style.display = this.state.phase === 'over' ? 'none' : 'block';
+      this._takeBackBtnEl.style.display = this.state.phase === 'over' ? 'none' : 'block';
+      this._resignBtnEl.style.display = this.state.phase === 'over' ? 'none' : 'block';
+      this._takeBackBtnEl.disabled = this.history.length === 0;
       this._replayEl.style.display = this.state.phase === 'over' ? 'flex' : 'none';
       this.engine.setDifficulty(this.state.difficulty);
 
@@ -814,6 +954,8 @@ export class GameController {
       theme: this.settings.theme,
       volume: this.settings.volume,
       soundEnabled: this.settings.soundEnabled,
+      playerColor: this.settings.playerColor,
+      difficulty: this.settings.difficulty,
     }));
   }
 }

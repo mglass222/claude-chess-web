@@ -21,6 +21,13 @@ export class MoveHistory {
     }
   }
 
+  removeLast() {
+    if (this.moves.length > 1) {
+      this.moves.pop();
+      this.currentIndex = -1;
+    }
+  }
+
   clear() {
     this.moves = [];
     this.currentIndex = -1;

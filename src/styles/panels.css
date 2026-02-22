@@ -8,20 +8,35 @@
 }
 
 .panel-btn {
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent), #4a7a9e);
   color: white;
-  border: 2px solid rgba(255,255,255,0.15);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: var(--btn-radius);
   padding: 12px 16px;
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: all var(--transition-medium);
   width: 100%;
 }
 
 .panel-btn:hover {
-  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px var(--accent-glow);
+  background: linear-gradient(135deg, var(--accent-hover), var(--accent));
+}
+
+.panel-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px var(--accent-glow);
+}
+
+.panel-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+  transform: none;
+  box-shadow: none;
 }
 
 /* Depth slider */
@@ -35,9 +50,11 @@
 }
 
 .depth-label {
-  font-size: 13px;
-  color: var(--panel-text);
+  font-size: 11px;
+  color: rgba(224, 224, 224, 0.6);
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .depth-slider {
@@ -50,7 +67,7 @@
 .eval-bar {
   width: 44px;
   height: 100%;
-  border: 2px solid #555;
+  border: 2px solid rgba(255, 255, 255, 0.12);
   border-radius: 4px;
   position: relative;
   overflow: hidden;
@@ -135,13 +152,15 @@
 }
 
 .move-list-title {
-  font-size: 16px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--accent);
   text-align: center;
   padding: 8px 0;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--glass-border);
   flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 
 .move-list-content {
@@ -192,6 +211,7 @@
   background: var(--accent);
   color: white;
   font-weight: 600;
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 
 /* Player Info */
@@ -213,6 +233,7 @@
   font-size: 14px;
   font-weight: 700;
   flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15), 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .player-avatar.white-piece {
@@ -254,17 +275,100 @@
 }
 
 .analysis-graph-close {
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent), #4a7a9e);
   color: white;
   border: none;
   border-radius: var(--btn-radius);
   padding: 8px 24px;
   font-size: 14px;
   cursor: pointer;
+  transition: all var(--transition-medium);
 }
 
 .analysis-graph-close:hover {
-  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px var(--accent-glow);
+  background: linear-gradient(135deg, var(--accent-hover), var(--accent));
+}
+
+/* Analysis Time Selection */
+.analysis-time-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.analysis-time-label {
+  font-size: 14px;
+  color: rgba(224, 224, 224, 0.7);
+  font-weight: 600;
+}
+
+.analysis-time-options {
+  display: flex;
+  gap: 8px;
+}
+
+.analysis-time-btn {
+  width: 52px;
+  height: 44px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--panel-text);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-medium);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.analysis-time-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.analysis-time-btn.selected {
+  background: linear-gradient(135deg, var(--gold), #a07840);
+  color: white;
+  border-color: var(--gold);
+  box-shadow: 0 0 12px var(--gold-glow);
+}
+
+/* Analysis Progress */
+.analysis-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 80%;
+  max-width: 400px;
+}
+
+.analysis-progress-text {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.analysis-progress-bar-outer {
+  width: 100%;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.analysis-progress-bar-inner {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent), #00c864);
+  border-radius: 6px;
+  transition: width 0.3s ease;
 }
 
 @media (max-width: 1000px) {

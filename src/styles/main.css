@@ -2,13 +2,20 @@
 :root {
   --light-square: #d9d7c3;
   --dark-square: #658047;
-  --bg-color: #2a2a2a;
-  --panel-bg: #1e1e1e;
+  --bg-color: #1a1a2e;
+  --panel-bg: rgba(255, 255, 255, 0.06);
   --panel-text: #e0e0e0;
-  --accent: #4a7b9d;
-  --accent-hover: #5a8fb3;
-  --gold: #b58863;
+  --accent: #5b8fb9;
+  --accent-hover: #6da0c8;
+  --gold: #c9975c;
   --btn-radius: 8px;
+  --accent-glow: rgba(91, 143, 185, 0.4);
+  --gold-glow: rgba(201, 151, 92, 0.4);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-blur: blur(16px);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --dialog-radius: 20px;
+  --transition-medium: 0.25s ease;
 }
 
 * {
@@ -21,9 +28,10 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  font-family: 'Segoe UI', Arial, sans-serif;
-  background: var(--bg-color);
+  font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
   color: var(--panel-text);
+  -webkit-font-smoothing: antialiased;
 }
 
 #app-container {
@@ -47,12 +55,14 @@ html, body {
 
 #left-panel {
   background: var(--panel-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 80px 8px 10px;
   overflow-y: auto;
-  border-right: 1px solid #333;
+  border-right: 1px solid var(--glass-border);
 }
 
 #board-column {
@@ -88,11 +98,13 @@ html, body {
 
 #right-panel {
   background: var(--panel-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   display: flex;
   flex-direction: column;
   padding: 80px 8px 10px;
   overflow: hidden;
-  border-left: 1px solid #333;
+  border-left: 1px solid var(--glass-border);
 }
 
 /* Responsive */
@@ -106,13 +118,13 @@ html, body {
     flex-wrap: wrap;
     justify-content: center;
     border-right: none;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid var(--glass-border);
     padding: 8px;
     order: -1;
   }
   #right-panel {
     border-left: none;
-    border-top: 1px solid #333;
+    border-top: 1px solid var(--glass-border);
     max-height: 200px;
   }
   #board-area {
@@ -125,9 +137,9 @@ html, body {
   width: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--panel-bg);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #555;
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 3px;
 }

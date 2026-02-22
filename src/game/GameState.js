@@ -36,8 +36,8 @@ export class GameState {
     this.evalAnimStart = 0;
     this.evalAnimating = false;
 
-    // Move evaluation history (centipawn values per move)
-    this.moveEvaluations = [];
+    // Post-game analysis results: { evaluations: number[], movetime: number } or null
+    this.analysisResults = null;
 
     // Remember last settings for restart
     this.lastPlayerColor = this.playerColor;
@@ -120,7 +120,7 @@ export class GameState {
     this.analyzing = false;
     this.evaluation = null;
     this.analysisInfo = null;
-    this.moveEvaluations = [];
+    this.analysisResults = null;
     this.targetEvalCp = 0;
     this.currentEvalCp = 0;
     this.evalAnimating = false;
@@ -140,7 +140,7 @@ export class GameState {
     this.analyzing = false;
     this.evaluation = null;
     this.analysisInfo = null;
-    this.moveEvaluations = [];
+    this.analysisResults = null;
     this.targetEvalCp = 0;
     this.currentEvalCp = 0;
     this.evalAnimating = false;
@@ -150,17 +150,13 @@ export class GameState {
     this.currentMateIn = null;
   }
 
-  addEvaluation(cpValue) {
-    this.moveEvaluations.push(cpValue);
-  }
-
   // Serialization for save/load
   serialize(moveHistory) {
     return {
       fen: this.fen,
       playerColor: this.playerColor,
       difficulty: this.difficulty,
-      moveEvaluations: this.moveEvaluations,
+      analysisResults: this.analysisResults,
       moveHistory: moveHistory ? moveHistory.serialize() : null,
     };
   }
@@ -171,7 +167,7 @@ export class GameState {
     this.difficulty = data.difficulty;
     this.phase = 'playing';
     this.winner = null;
-    this.moveEvaluations = data.moveEvaluations || [];
+    this.analysisResults = data.analysisResults || null;
     this.checkGameOver();
     return data.moveHistory || null;
   }

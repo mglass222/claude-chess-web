@@ -15,31 +15,32 @@
 .promotion-dialog {
   display: flex;
   flex-direction: column;
-  background: #eee;
-  border-radius: 8px;
+  background: rgba(30, 30, 46, 0.95);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
 .promotion-piece {
   width: 80px;
   height: 80px;
   border: none;
-  background: #ddd;
+  background: rgba(255, 255, 255, 0.06);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 4px;
-  transition: background 0.1s;
+  transition: background 0.15s;
 }
 
 .promotion-piece:nth-child(even) {
-  background: #ccc;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .promotion-piece:hover {
-  background: #b8d4e8;
+  background: rgba(91, 143, 185, 0.3);
 }
 
 .promotion-piece img {
@@ -54,7 +55,9 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -62,16 +65,18 @@
 }
 
 .settings-panel {
-  background: var(--panel-bg);
-  border: 1px solid #444;
-  border-radius: 12px;
+  background: rgba(30, 30, 46, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--dialog-radius);
   padding: 30px 40px;
   min-width: 320px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
-  box-shadow: 0 12px 48px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
 .settings-title {
@@ -82,7 +87,7 @@
 }
 
 .settings-btn {
-  background: var(--gold);
+  background: linear-gradient(135deg, var(--gold), #a07840);
   color: white;
   border: none;
   border-radius: var(--btn-radius);
@@ -91,20 +96,29 @@
   font-weight: 600;
   cursor: pointer;
   width: 100%;
-  transition: background 0.15s;
+  transition: all var(--transition-medium);
 }
 
 .settings-btn:hover {
-  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px var(--gold-glow);
 }
 
 .settings-btn.active {
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent), #4a7a9e);
+}
+
+.settings-btn.active:hover {
+  box-shadow: 0 4px 16px var(--accent-glow);
 }
 
 .settings-close-btn {
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent), #4a7a9e);
   margin-top: 8px;
+}
+
+.settings-close-btn:hover {
+  box-shadow: 0 4px 16px var(--accent-glow);
 }
 
 .settings-row {
@@ -135,11 +149,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s;
+  transition: all var(--transition-medium);
 }
 
 .settings-btn-small:hover {
-  filter: brightness(1.1);
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px var(--gold-glow);
 }
 
 /* Game Over Overlay */
@@ -149,6 +164,8 @@
   left: 0;
   width: 100%;
   height: 100%;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -156,11 +173,14 @@
 }
 
 .game-over-inner {
-  background: rgba(30, 60, 90, 0.95);
-  border-radius: 16px;
+  background: rgba(30, 30, 46, 0.9);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--dialog-radius);
   padding: 32px 48px;
   text-align: center;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
 .game-over-result {
@@ -178,7 +198,7 @@
 }
 
 .go-btn {
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent), #4a7a9e);
   color: white;
   border: none;
   border-radius: var(--btn-radius);
@@ -186,17 +206,25 @@
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: all var(--transition-medium);
 }
 
 .go-btn:hover {
-  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px var(--accent-glow);
+  background: linear-gradient(135deg, var(--accent-hover), var(--accent));
+}
+
+.go-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px var(--accent-glow);
 }
 
 .go-btn-secondary {
-  background: var(--gold);
+  background: linear-gradient(135deg, var(--gold), #a07840);
 }
 
 .go-btn-secondary:hover {
-  filter: brightness(1.1);
+  box-shadow: 0 4px 16px var(--gold-glow);
+  background: linear-gradient(135deg, #d4a468, var(--gold));
 }

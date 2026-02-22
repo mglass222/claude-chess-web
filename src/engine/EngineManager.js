@@ -187,6 +187,47 @@ export class EngineManager {
     }, 50);
   }
 
+  analyzePosition(fen, movetime) {
+    return new Promise((resolve) => {
+      if (!this.ready) {
+        resolve(null);
+        return;
+      }
+
+      this.stopAnalysis();
+
+      let best = null;
+      const timeoutId = setTimeout(() => {
+        this.onAnalysisUpdate = null;
+        this.onBestMove = null;
+        this.worker.postMessage('stop');
+        resolve(best);
+      }, movetime + 5000);
+
+      this._readyCallback = () => {
+        // Capture deepest info line
+        this.onAnalysisUpdate = (info) => {
+          best = {
+            cp: info.cp,
+            mate: info.mate,
+            depth: info.depth,
+            bestMove: info.bestMove || (info.pv && info.pv[0]) || null,
+          };
+        };
+
+        this.onBestMove = () => {
+          clearTimeout(timeoutId);
+          this.onAnalysisUpdate = null;
+          resolve(best);
+        };
+
+        this.worker.postMessage(`position fen ${fen}`);
+        this.worker.postMessage(`go movetime ${movetime}`);
+      };
+      this.worker.postMessage('isready');
+    });
+  }
+
   stopAnalysis() {
     if (!this.ready) return;
     this.analyzing = false;

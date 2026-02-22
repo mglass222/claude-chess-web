@@ -10,20 +10,31 @@ export class SetupScreen {
   }
 
   _build() {
-    this.el = document.createElement('div');
-    this.el.className = 'setup-screen';
+    this.overlay = document.createElement('div');
+    this.overlay.className = 'setup-overlay';
+    this.overlay.style.display = 'none';
+
+    // Click overlay to close (cancel)
+    this.overlay.addEventListener('click', (e) => {
+      if (e.target === this.overlay) {
+        this.hide();
+      }
+    });
+
+    const panel = document.createElement('div');
+    panel.className = 'setup-panel';
 
     // Title
-    const title = document.createElement('h1');
+    const title = document.createElement('h2');
     title.className = 'setup-title';
-    title.textContent = 'Chess Game Setup';
-    this.el.appendChild(title);
+    title.textContent = 'New Game';
+    panel.appendChild(title);
 
     // Color selection
     const colorSection = document.createElement('div');
     colorSection.className = 'setup-section';
 
-    const colorLabel = document.createElement('h2');
+    const colorLabel = document.createElement('h3');
     colorLabel.className = 'setup-label';
     colorLabel.textContent = 'Select Side';
     colorSection.appendChild(colorLabel);
@@ -52,13 +63,13 @@ export class SetupScreen {
     colorRow.appendChild(this.whiteBtn);
     colorRow.appendChild(this.blackBtn);
     colorSection.appendChild(colorRow);
-    this.el.appendChild(colorSection);
+    panel.appendChild(colorSection);
 
     // Difficulty selection
     const diffSection = document.createElement('div');
     diffSection.className = 'setup-section';
 
-    const diffLabel = document.createElement('h2');
+    const diffLabel = document.createElement('h3');
     diffLabel.className = 'setup-label';
     diffLabel.textContent = 'Difficulty';
     diffSection.appendChild(diffLabel);
@@ -77,7 +88,7 @@ export class SetupScreen {
     }
 
     diffSection.appendChild(diffRow);
-    this.el.appendChild(diffSection);
+    panel.appendChild(diffSection);
 
     // Start button
     const startBtn = document.createElement('button');
@@ -91,9 +102,10 @@ export class SetupScreen {
         });
       }
     });
-    this.el.appendChild(startBtn);
+    panel.appendChild(startBtn);
 
-    this.container.appendChild(this.el);
+    this.overlay.appendChild(panel);
+    this.container.appendChild(this.overlay);
   }
 
   _selectColor(color) {
@@ -109,11 +121,13 @@ export class SetupScreen {
     });
   }
 
-  show() {
-    this.el.style.display = 'flex';
+  show(color, difficulty) {
+    if (color) this._selectColor(color);
+    if (difficulty) this._selectDifficulty(difficulty);
+    this.overlay.style.display = 'flex';
   }
 
   hide() {
-    this.el.style.display = 'none';
+    this.overlay.style.display = 'none';
   }
 }
