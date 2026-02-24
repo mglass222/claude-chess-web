@@ -679,6 +679,7 @@ export class GameController {
     this.state.analyzing = true;
     this.state.evaluation = null;
     this.state.bestMove = null;
+    this.evalBar.update(null); // Reset depth gate for new position
     this.engine.onAnalysisUpdate = (info) => this._handleAnalysisUpdate(info);
     this.engine.startAnalysis(this.state.fen, this.state.analysisDepth);
   }
@@ -686,10 +687,15 @@ export class GameController {
   _handleAnalysisUpdate(info) {
     if (this.state.phase !== 'playing' && this.state.phase !== 'over') return;
 
-    // Store evaluation
+    // Stockfish reports scores from the side-to-move's perspective.
+    // Normalize to white's perspective for the eval bar.
+    const turnFromFen = this.state.fen.split(' ')[1];
+    const flip = turnFromFen === 'b' ? -1 : 1;
+
+    // Store evaluation (normalized to white's perspective)
     this.state.evaluation = {
-      cp: info.cp,
-      mate: info.mate,
+      cp: info.cp != null ? info.cp * flip : info.cp,
+      mate: info.mate != null ? info.mate * flip : info.mate,
       depth: info.depth,
     };
 

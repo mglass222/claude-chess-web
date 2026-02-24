@@ -40,7 +40,8 @@ export const DEFAULTS = {
 };
 
 export const ANIMATION_DURATION = 300; // ms
-export const EVAL_BAR_ANIMATION_DURATION = 300; // ms
+export const EVAL_BAR_ANIMATION_DURATION = 500; // ms
+export const EVAL_BAR_MIN_DEPTH = 12;
 export const ANALYSIS_DEPTH_MIN = 16;
 export const ANALYSIS_DEPTH_MAX = 22;
 

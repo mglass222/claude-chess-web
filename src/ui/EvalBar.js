@@ -1,4 +1,4 @@
-import { EVAL_BAR_ANIMATION_DURATION } from '../config.js';
+import { EVAL_BAR_ANIMATION_DURATION, EVAL_BAR_MIN_DEPTH } from '../config.js';
 
 export class EvalBar {
   constructor(container) {
@@ -6,11 +6,13 @@ export class EvalBar {
     this.playerColor = 'w';
     this._currentCp = 0;
     this._targetCp = 0;
+    this._startCp = 0;
     this._isMate = false;
     this._mateIn = null;
     this._animStart = 0;
     this._animating = false;
     this._rafId = null;
+    this._depthMet = false;
 
     this._build();
   }
@@ -67,25 +69,47 @@ export class EvalBar {
   update(evaluation) {
     if (!evaluation) {
       this._showCalculating();
+      this._depthMet = false;
       return;
     }
 
-    const { cp, mate } = evaluation;
+    const { cp, mate, depth } = evaluation;
+
+    // Filter out shallow, noisy evaluations after a new position
+    if (depth !== undefined && depth < EVAL_BAR_MIN_DEPTH && !this._depthMet) {
+      this._showCalculating();
+      return;
+    }
+
+    let newCp;
+    if (mate !== null && mate !== undefined) {
+      newCp = mate > 0 ? (10000 - Math.abs(mate) * 100) : (-10000 + Math.abs(mate) * 100);
+    } else if (cp !== null && cp !== undefined) {
+      newCp = cp;
+    } else {
+      return;
+    }
+
+    // Once depth threshold is met, only re-animate if the change is significant
+    // or this is the first update past the threshold
+    if (this._depthMet) {
+      const delta = Math.abs(newCp - this._targetCp);
+      if (delta < 15) return; // Skip tiny fluctuations between depths
+    }
+    this._depthMet = true;
 
     if (mate !== null && mate !== undefined) {
       this._isMate = true;
       this._mateIn = mate;
-      // Use large cp value for mate
-      const mateCp = mate > 0 ? (10000 - Math.abs(mate) * 100) : (-10000 + Math.abs(mate) * 100);
-      this._setTarget(mateCp);
-    } else if (cp !== null && cp !== undefined) {
+    } else {
       this._isMate = false;
       this._mateIn = null;
-      this._setTarget(cp);
     }
+    this._setTarget(newCp);
   }
 
   _setTarget(cp) {
+    this._startCp = this._currentCp;
     this._targetCp = cp;
     this._animStart = performance.now();
     this._animating = true;
@@ -104,7 +128,7 @@ export class EvalBar {
     const progress = Math.min(1, elapsed / EVAL_BAR_ANIMATION_DURATION);
     const eased = 1 - Math.pow(1 - progress, 2); // ease-out quad
 
-    this._currentCp = this._currentCp + (this._targetCp - this._currentCp) * eased;
+    this._currentCp = this._startCp + (this._targetCp - this._startCp) * eased;
 
     if (progress >= 1) {
       this._currentCp = this._targetCp;
@@ -160,9 +184,11 @@ export class EvalBar {
     }
     this._currentCp = 0;
     this._targetCp = 0;
+    this._startCp = 0;
     this._isMate = false;
     this._mateIn = null;
     this._animating = false;
+    this._depthMet = false;
     this._updateBar(0);
     this.scoreLabel.textContent = '0.0';
     this.scoreLabel.className = 'eval-score white-advantage';
