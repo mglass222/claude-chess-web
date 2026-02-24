@@ -99,6 +99,10 @@ export class GameController {
     this._buildLeftPanel(leftPanel);
 
     this.moveList = new MoveList(rightPanel);
+
+    // Game info section (FEN + PGN) below move list
+    this._buildGameInfo(rightPanel);
+
     this.analysisGraph = new AnalysisGraph(boardArea);
     this.promotionDialog = new PromotionDialog(boardArea);
     this.setupScreen = new SetupScreen(appContainer);
@@ -217,6 +221,106 @@ export class GameController {
     container.appendChild(this._replayEl);
   }
 
+  _buildGameInfo(container) {
+    this._gameInfoEl = document.createElement('div');
+    this._gameInfoEl.className = 'game-info';
+    this._gameInfoEl.style.display = 'none';
+
+    // FEN section
+    const fenLabel = document.createElement('div');
+    fenLabel.className = 'game-info-label';
+    fenLabel.textContent = 'FEN';
+
+    const fenRow = document.createElement('div');
+    fenRow.className = 'game-info-row';
+
+    this._fenInputEl = document.createElement('input');
+    this._fenInputEl.type = 'text';
+    this._fenInputEl.className = 'fen-input';
+    this._fenInputEl.readOnly = true;
+
+    this._fenCopyBtn = document.createElement('button');
+    this._fenCopyBtn.className = 'copy-btn';
+    this._fenCopyBtn.textContent = 'Copy';
+    this._fenCopyBtn.addEventListener('click', () => this._copyToClipboard(this._fenInputEl.value, this._fenCopyBtn));
+
+    fenRow.appendChild(this._fenInputEl);
+    fenRow.appendChild(this._fenCopyBtn);
+
+    // PGN button
+    this._pgnCopyBtn = document.createElement('button');
+    this._pgnCopyBtn.className = 'panel-btn pgn-btn';
+    this._pgnCopyBtn.textContent = 'Copy PGN';
+    this._pgnCopyBtn.addEventListener('click', () => this._copyToClipboard(this._generatePgn(), this._pgnCopyBtn));
+
+    this._gameInfoEl.appendChild(fenLabel);
+    this._gameInfoEl.appendChild(fenRow);
+    this._gameInfoEl.appendChild(this._pgnCopyBtn);
+    container.appendChild(this._gameInfoEl);
+  }
+
+  _updateGameInfo() {
+    if (!this._fenInputEl) return;
+    // Show FEN for the currently viewed position
+    const viewIdx = this.history.getCurrentViewIndex();
+    if (viewIdx >= 0 && viewIdx < this.history.moves.length) {
+      this._fenInputEl.value = this.history.moves[viewIdx].fen || this.state.fen;
+    } else {
+      this._fenInputEl.value = this.state.fen;
+    }
+  }
+
+  _generatePgn() {
+    const date = new Date();
+    const dateStr = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
+    const isWhite = this.state.lastPlayerColor === 'w';
+    const white = isWhite ? 'You' : `Stockfish (Level ${this.state.lastDifficulty})`;
+    const black = isWhite ? `Stockfish (Level ${this.state.lastDifficulty})` : 'You';
+
+    let result = '*';
+    if (this.state.phase === 'over') {
+      if (this.state.winner === 'White') result = '1-0';
+      else if (this.state.winner === 'Black') result = '0-1';
+      else result = '1/2-1/2';
+    }
+
+    let pgn = '';
+    pgn += `[Event "Claude Chess"]\n`;
+    pgn += `[Site "-"]\n`;
+    pgn += `[Date "${dateStr}"]\n`;
+    pgn += `[Round "-"]\n`;
+    pgn += `[White "${white}"]\n`;
+    pgn += `[Black "${black}"]\n`;
+    pgn += `[Result "${result}"]\n\n`;
+
+    // Build move text from history
+    const moves = this.history.getMoves();
+    for (let i = 0; i < moves.length; i++) {
+      if (i % 2 === 0) pgn += `${Math.floor(i / 2) + 1}. `;
+      pgn += moves[i].san + ' ';
+    }
+    pgn += result;
+
+    return pgn.trim();
+  }
+
+  _copyToClipboard(text, btn) {
+    const original = btn.textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      this._setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1500);
+    }).catch(() => {
+      btn.textContent = 'Failed!';
+      this._setTimeout(() => {
+        btn.textContent = original;
+      }, 1500);
+    });
+  }
+
   _wireCallbacks() {
     // Board interaction
     this.boardView.onSquareClick = (square) => this._handleSquareClick(square);
@@ -303,6 +407,8 @@ export class GameController {
     this._takeBackBtnEl.disabled = true;
     this._resignBtnEl.style.display = 'block';
     this._replayEl.style.display = 'none';
+    this._gameInfoEl.style.display = 'flex';
+    this._updateGameInfo();
 
     // Reset eval bar
     this.evalBar.reset();
@@ -351,6 +457,7 @@ export class GameController {
     this._resignBtnEl.style.display = 'block';
     this._takeBackBtnEl.disabled = true;
     this._replayEl.style.display = 'none';
+    this._updateGameInfo();
 
     this.engine.setDifficulty(this.state.difficulty);
     this._startAnalysis();
@@ -466,6 +573,7 @@ export class GameController {
 
     // Update move list
     this.moveList.render(this.history);
+    this._updateGameInfo();
 
     // Enable take back
     this._takeBackBtnEl.disabled = false;
@@ -542,6 +650,7 @@ export class GameController {
     this.boardView.setLastMove(from, to);
     this._updateCheckHighlight();
     this.moveList.render(this.history);
+    this._updateGameInfo();
 
     // Check game over
     if (this.state.checkGameOver()) {
@@ -664,6 +773,7 @@ export class GameController {
 
     // Update move list
     this.moveList.render(this.history);
+    this._updateGameInfo();
 
     // Disable take back if no moves left
     this._takeBackBtnEl.disabled = this.history.length === 0;
@@ -748,6 +858,7 @@ export class GameController {
     }
 
     this.moveList.render(this.history);
+    this._updateGameInfo();
     if (this.analysisGraph.visible) {
       this.analysisGraph.setHighlight(this.history.getCurrentViewIndex());
     }
@@ -761,6 +872,7 @@ export class GameController {
       this.boardView.updatePosition(this.state.board);
     }
     this.moveList.render(this.history);
+    this._updateGameInfo();
     if (this.analysisGraph.visible) {
       this.analysisGraph.setHighlight(idx);
     }
@@ -790,6 +902,7 @@ export class GameController {
           const fen = this.history.goToStart();
           if (fen) this._showPositionFromFen(fen);
           this.moveList.render(this.history);
+          this._updateGameInfo();
           if (this.analysisGraph.visible) {
             this.analysisGraph.setHighlight(this.history.getCurrentViewIndex());
           }
@@ -800,6 +913,7 @@ export class GameController {
         this.history.goToEnd();
         this.boardView.updatePosition(this.state.board);
         this.moveList.render(this.history);
+        this._updateGameInfo();
         if (this.analysisGraph.visible) {
           this.analysisGraph.setHighlight(this.history.getCurrentViewIndex());
         }
@@ -932,6 +1046,8 @@ export class GameController {
       this.evalBar.setPlayerColor(this.state.playerColor);
       this.evalBar.reset();
       this.moveList.render(this.history);
+      this._gameInfoEl.style.display = 'flex';
+      this._updateGameInfo();
       this._leftPanelEl.style.display = 'flex';
       this._hintBtnEl.style.display = this.state.phase === 'over' ? 'none' : 'block';
       this._takeBackBtnEl.style.display = this.state.phase === 'over' ? 'none' : 'block';

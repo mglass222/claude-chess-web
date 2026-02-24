@@ -252,6 +252,76 @@
   color: var(--panel-text);
 }
 
+/* Game Info (FEN + PGN) */
+.game-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 4px;
+  border-top: 1px solid var(--glass-border);
+  flex-shrink: 0;
+}
+
+.game-info-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.game-info-row {
+  display: flex;
+  gap: 6px;
+}
+
+.fen-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+  color: var(--panel-text);
+  font-family: monospace;
+  font-size: 11px;
+  padding: 6px 8px;
+  outline: none;
+}
+
+.fen-input:focus {
+  border-color: var(--accent);
+}
+
+.copy-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--panel-text);
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-medium);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.copy-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--accent);
+}
+
+.copy-btn.copied {
+  background: rgba(0, 180, 80, 0.25);
+  border-color: #00b450;
+  color: #00e064;
+}
+
+.pgn-btn {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
 /* Analysis Graph */
 .analysis-graph-overlay {
   position: absolute;
