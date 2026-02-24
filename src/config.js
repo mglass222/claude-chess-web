@@ -1,7 +1,7 @@
 // All constants, theme definitions, and default settings
 
 export const THEMES = {
-  classic:    { light: '#d9d7c3', dark: '#658047' },
+  classic:    { light: '#e8dcc8', dark: '#a07850' },
   modern:     { light: '#f0f0f0', dark: '#505050' },
   forest:     { light: '#e6e6c8', dark: '#326432' },
   lichess:    { light: '#f0d9b5', dark: '#b58863' },

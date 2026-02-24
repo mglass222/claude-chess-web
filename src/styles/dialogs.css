@@ -10,23 +10,25 @@
   align-items: center;
   justify-content: center;
   z-index: 30;
+  animation: overlayFadeIn 0.2s ease forwards;
 }
 
 .promotion-dialog {
   display: flex;
   flex-direction: column;
-  background: rgba(30, 30, 46, 0.95);
+  background: rgba(24, 22, 30, 0.95);
   border: 1px solid var(--glass-border);
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+  animation: dialogSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .promotion-piece {
   width: 80px;
   height: 80px;
   border: none;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.04);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -36,11 +38,11 @@
 }
 
 .promotion-piece:nth-child(even) {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .promotion-piece:hover {
-  background: rgba(91, 143, 185, 0.3);
+  background: rgba(196, 154, 108, 0.2);
 }
 
 .promotion-piece img {
@@ -62,37 +64,41 @@
   align-items: center;
   justify-content: center;
   z-index: 50;
+  animation: overlayFadeIn 0.3s ease forwards;
 }
 
 .settings-panel {
-  background: rgba(30, 30, 46, 0.85);
+  background: rgba(24, 22, 30, 0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
   border-radius: var(--dialog-radius);
-  padding: 30px 40px;
+  padding: 32px 40px;
   min-width: 320px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  animation: dialogSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .settings-title {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--panel-text);
   margin-bottom: 8px;
 }
 
 .settings-btn {
-  background: linear-gradient(135deg, var(--gold), #a07840);
-  color: white;
+  background: var(--accent);
+  color: #1a1510;
   border: none;
   border-radius: var(--btn-radius);
-  padding: 12px 24px;
-  font-size: 15px;
+  padding: 11px 24px;
+  font-family: var(--font-body);
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   width: 100%;
@@ -101,24 +107,34 @@
 
 .settings-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px var(--gold-glow);
+  box-shadow: 0 4px 16px var(--accent-glow);
+  background: var(--accent-hover);
 }
 
 .settings-btn.active {
-  background: linear-gradient(135deg, var(--accent), #4a7a9e);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--panel-text);
+  border: 1px solid var(--glass-border);
 }
 
 .settings-btn.active:hover {
-  box-shadow: 0 4px 16px var(--accent-glow);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--accent);
+  box-shadow: none;
 }
 
 .settings-close-btn {
-  background: linear-gradient(135deg, var(--accent), #4a7a9e);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--panel-text);
+  border: 1px solid var(--glass-border);
   margin-top: 8px;
 }
 
 .settings-close-btn:hover {
-  box-shadow: 0 4px 16px var(--accent-glow);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: none;
 }
 
 .settings-row {
@@ -130,20 +146,21 @@
 }
 
 .settings-vol-label {
+  font-family: var(--font-body);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   min-width: 100px;
   text-align: center;
 }
 
 .settings-btn-small {
-  background: var(--gold);
-  color: white;
+  background: var(--accent);
+  color: #1a1510;
   border: none;
   border-radius: 50%;
-  width: 36px;
-  height: 36px;
-  font-size: 20px;
+  width: 34px;
+  height: 34px;
+  font-size: 18px;
   font-weight: 700;
   cursor: pointer;
   display: flex;
@@ -154,7 +171,8 @@
 
 .settings-btn-small:hover {
   transform: scale(1.1);
-  box-shadow: 0 2px 8px var(--gold-glow);
+  box-shadow: 0 2px 8px var(--accent-glow);
+  background: var(--accent-hover);
 }
 
 /* Game Over Overlay */
@@ -170,40 +188,46 @@
   align-items: center;
   justify-content: center;
   z-index: 15;
+  animation: overlayFadeIn 0.3s ease forwards;
 }
 
 .game-over-inner {
-  background: rgba(30, 30, 46, 0.9);
+  background: rgba(24, 22, 30, 0.92);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
   border-radius: var(--dialog-radius);
-  padding: 32px 48px;
+  padding: 36px 48px;
   text-align: center;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  animation: dialogSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .game-over-result {
-  font-size: 32px;
+  font-family: var(--font-display);
+  font-size: 36px;
   font-weight: 700;
-  color: white;
+  color: #fff;
   margin-bottom: 24px;
+  letter-spacing: 0.02em;
 }
 
 .game-over-buttons {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
   justify-content: center;
 }
 
+/* Primary game-over button */
 .go-btn {
-  background: linear-gradient(135deg, var(--accent), #4a7a9e);
-  color: white;
+  background: var(--accent);
+  color: #1a1510;
   border: none;
   border-radius: var(--btn-radius);
   padding: 10px 24px;
-  font-size: 15px;
+  font-family: var(--font-body);
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--transition-medium);
@@ -212,7 +236,7 @@
 .go-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 16px var(--accent-glow);
-  background: linear-gradient(135deg, var(--accent-hover), var(--accent));
+  background: var(--accent-hover);
 }
 
 .go-btn:active {
@@ -220,11 +244,16 @@
   box-shadow: 0 2px 8px var(--accent-glow);
 }
 
+/* Secondary game-over button */
 .go-btn-secondary {
-  background: linear-gradient(135deg, var(--gold), #a07840);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--panel-text);
+  border: 1px solid var(--glass-border);
 }
 
 .go-btn-secondary:hover {
-  box-shadow: 0 4px 16px var(--gold-glow);
-  background: linear-gradient(135deg, #d4a468, var(--gold));
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: none;
 }

@@ -145,9 +145,11 @@ export class GameController {
       { id: 'resign', label: 'Resign', action: () => this._resign() },
     ];
 
+    const secondaryIds = new Set(['settings', 'save', 'load']);
     for (const { id, label, action } of buttons) {
       const btn = document.createElement('button');
       btn.className = 'panel-btn';
+      if (secondaryIds.has(id)) btn.classList.add('panel-btn-secondary');
       btn.id = `btn-${id}`;
       btn.textContent = label;
       btn.addEventListener('click', action);
@@ -162,6 +164,7 @@ export class GameController {
       }
       if (id === 'resign') {
         this._resignBtnEl = btn;
+        btn.classList.add('panel-btn-danger');
         btn.style.display = 'none';
       }
     }
