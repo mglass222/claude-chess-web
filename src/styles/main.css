@@ -76,6 +76,34 @@ body::after {
   z-index: 1;
 }
 
+/* Settings gear icon */
+.settings-gear {
+  position: absolute;
+  top: -45px;
+  right: -8px;
+  z-index: 6;
+  background: none;
+  border: none;
+  color: rgba(212, 208, 200, 0.35);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all var(--transition-medium);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-gear:hover {
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.06);
+  transform: rotate(30deg);
+}
+
+.settings-gear:active {
+  transform: rotate(30deg) scale(0.95);
+}
+
 #game-layout {
   display: grid;
   grid-template-columns: 220px 1fr 240px;

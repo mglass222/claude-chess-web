@@ -21,18 +21,47 @@ export const THEMES = {
 
 export const THEME_NAMES = Object.keys(THEMES);
 
-export const DIFFICULTY_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+export const DIFFICULTY_LEVELS = [
+  { id: 1,  label: 'Novice',       short: 'Nov',  skillLevel: 0,  depth: 3  },
+  { id: 2,  label: 'Beginner',     short: 'Beg',  skillLevel: 3,  depth: 5  },
+  { id: 3,  label: 'Intermediate', short: 'Int',   skillLevel: 6,  depth: 7  },
+  { id: 4,  label: 'Advanced',     short: 'Adv',  skillLevel: 10, depth: 9  },
+  { id: 5,  label: 'Master',       short: 'Mst',  skillLevel: 14, depth: 11 },
+  { id: 6,  label: 'IM',           short: 'IM',   skillLevel: 17, depth: 13 },
+  { id: 7,  label: 'GM',           short: 'GM',   skillLevel: 19, depth: 14 },
+  { id: 8,  label: 'Super GM',     short: 'SGM',  skillLevel: 20, depth: 15 },
+];
 
-// Map difficulty (1-10) to Stockfish Skill Level (0-20) and depth limit
+export const DIFFICULTY_OPTIONS = DIFFICULTY_LEVELS.map(d => d.id);
+
+// Map difficulty id to Stockfish Skill Level and depth limit
 export function getDifficultyConfig(difficulty) {
+  const level = DIFFICULTY_LEVELS.find(d => d.id === difficulty);
+  if (level) return { skillLevel: level.skillLevel, depth: level.depth };
+  // Fallback for legacy saves
   const skillLevel = Math.round((difficulty - 1) * (20 / 9));
   const depth = Math.min(difficulty + 2, 15);
   return { skillLevel, depth };
 }
 
+export function getDifficultyLabel(difficulty) {
+  const level = DIFFICULTY_LEVELS.find(d => d.id === difficulty);
+  return level ? level.label : `Level ${difficulty}`;
+}
+
+export const TIME_CONTROLS = [
+  { label: '1 min',  minutes: 1  },
+  { label: '3 min',  minutes: 3  },
+  { label: '5 min',  minutes: 5  },
+  { label: '10 min', minutes: 10 },
+  { label: '15 min', minutes: 15 },
+  { label: '30 min', minutes: 30 },
+  { label: 'None',   minutes: 0  },
+];
+
 export const DEFAULTS = {
   playerColor: 'w',   // 'w' or 'b'
-  difficulty: 5,
+  difficulty: 1,
   theme: 'classic',
   volume: 0.5,
   soundEnabled: true,

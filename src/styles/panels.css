@@ -7,6 +7,187 @@
   padding: 8px 0;
 }
 
+.left-panel-buttons-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+/* Inline New Game Setup */
+.inline-new-game-setup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 4px 0;
+  animation: panelFadeIn 0.25s ease forwards;
+}
+
+@keyframes panelFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.setup-section-label {
+  font-size: 10px;
+  color: rgba(212, 208, 200, 0.45);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  width: 100%;
+  text-align: center;
+}
+
+.setup-divider {
+  width: 60%;
+  height: 1px;
+  background: var(--glass-border);
+  margin: 2px 0;
+}
+
+/* Color selection */
+.setup-color-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.setup-color-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 2px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: all var(--transition-medium);
+  color: rgba(212, 208, 200, 0.6);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.setup-color-btn:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--panel-text);
+}
+
+.setup-color-btn.selected {
+  border-color: var(--accent);
+  background: rgba(196, 154, 108, 0.08);
+  color: var(--accent);
+  box-shadow: 0 0 16px rgba(196, 154, 108, 0.12);
+}
+
+.setup-color-king {
+  width: 40px;
+  height: 40px;
+  transition: transform var(--transition-medium);
+}
+
+.setup-color-btn.selected .setup-color-king {
+  transform: scale(1.08);
+}
+
+/* Difficulty dropdown */
+.setup-diff-select {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--btn-radius);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--panel-text);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-medium);
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23c49a6c' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+.setup-diff-select:hover {
+  border-color: rgba(196, 154, 108, 0.4);
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.setup-diff-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(196, 154, 108, 0.15);
+}
+
+.setup-diff-select option {
+  background: #1a1820;
+  color: var(--panel-text);
+  padding: 8px;
+}
+
+/* Time control selection */
+.setup-time-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  width: 100%;
+}
+
+.setup-time-btn {
+  padding: 7px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--btn-radius);
+  background: transparent;
+  color: rgba(212, 208, 200, 0.55);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-medium);
+  text-align: center;
+}
+
+.setup-time-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--panel-text);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.setup-time-btn.selected {
+  background: rgba(196, 154, 108, 0.12);
+  color: var(--accent);
+  border-color: rgba(196, 154, 108, 0.3);
+  font-weight: 600;
+}
+
+.setup-time-btn-infinite {
+  width: 50%;
+  margin: 2px auto 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* Action buttons */
+.setup-action-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+}
+
 /* Primary button style */
 .panel-btn {
   background: var(--accent);
@@ -419,18 +600,18 @@
 
 .analysis-time-options {
   display: flex;
-  gap: 8px;
+  gap: 5px;
 }
 
 .analysis-time-btn {
-  width: 52px;
-  height: 44px;
+  width: 46px;
+  height: 36px;
   border: 1px solid var(--glass-border);
   border-radius: var(--btn-radius);
   background: rgba(255, 255, 255, 0.06);
   color: var(--panel-text);
   font-family: var(--font-body);
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--transition-medium);
@@ -490,6 +671,17 @@
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: center;
+  }
+  .left-panel-buttons-inner {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .inline-new-game-setup {
+    max-width: 400px;
+  }
+  .setup-time-grid {
+    grid-template-columns: repeat(4, 1fr);
   }
   .panel-btn {
     width: auto;

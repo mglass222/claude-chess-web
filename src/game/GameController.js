@@ -11,7 +11,7 @@ import { SetupScreen } from '../ui/SetupScreen.js';
 import { GameOverOverlay } from '../ui/GameOverOverlay.js';
 import { SettingsDialog } from '../ui/SettingsDialog.js';
 import { SoundManager } from '../ui/SoundManager.js';
-import { DEFAULTS, ANALYSIS_DEPTH_MIN, ANALYSIS_DEPTH_MAX, evalToCp } from '../config.js';
+import { DEFAULTS, DIFFICULTY_LEVELS, TIME_CONTROLS, ANALYSIS_DEPTH_MIN, ANALYSIS_DEPTH_MAX, evalToCp, getDifficultyLabel } from '../config.js';
 
 export class GameController {
   constructor() {
@@ -109,6 +109,13 @@ export class GameController {
     this.gameOverOverlay = new GameOverOverlay(boardArea);
     this.settingsDialog = new SettingsDialog(appContainer);
 
+    // Settings gear icon (top-right)
+    this._settingsGear = document.createElement('button');
+    this._settingsGear.className = 'settings-gear';
+    this._settingsGear.innerHTML = `<svg width="28" height="28" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" stroke="currentColor" stroke-width="1.5"/><path d="M16.17 12.5a1.39 1.39 0 00.28 1.53l.05.05a1.69 1.69 0 11-2.39 2.39l-.05-.05a1.39 1.39 0 00-1.53-.28 1.39 1.39 0 00-.84 1.27v.14a1.69 1.69 0 11-3.38 0v-.07a1.39 1.39 0 00-.91-1.27 1.39 1.39 0 00-1.53.28l-.05.05a1.69 1.69 0 11-2.39-2.39l.05-.05a1.39 1.39 0 00.28-1.53 1.39 1.39 0 00-1.27-.84h-.14a1.69 1.69 0 110-3.38h.07a1.39 1.39 0 001.27-.91 1.39 1.39 0 00-.28-1.53l-.05-.05a1.69 1.69 0 112.39-2.39l.05.05a1.39 1.39 0 001.53.28h.07a1.39 1.39 0 00.84-1.27v-.14a1.69 1.69 0 013.38 0v.07a1.39 1.39 0 00.84 1.27 1.39 1.39 0 001.53-.28l.05-.05a1.69 1.69 0 112.39 2.39l-.05.05a1.39 1.39 0 00-.28 1.53v.07a1.39 1.39 0 001.27.84h.14a1.69 1.69 0 110 3.38h-.07a1.39 1.39 0 00-1.27.84z" stroke="currentColor" stroke-width="1.5"/></svg>`;
+    this._settingsGear.addEventListener('click', () => this._openSettings());
+    boardArea.appendChild(this._settingsGear);
+
     // Build below-board area (hint + replay)
     this._buildBelowBoard(belowBoard);
 
@@ -135,15 +142,17 @@ export class GameController {
     this._leftPanelEl.style.display = 'none';
 
     const buttons = [
-      { id: 'restart', label: 'Restart', action: () => this._restart() },
-      { id: 'take-back', label: 'Take Back', action: () => this._takeBack() },
       { id: 'new-game', label: 'New Game', action: () => this._newGame() },
-      { id: 'settings', label: 'Settings', action: () => this._openSettings() },
+      { id: 'take-back', label: 'Take Back', action: () => this._takeBack() },
       { id: 'save', label: 'Save', action: () => this._saveGame() },
       { id: 'load', label: 'Load', action: () => this._loadGame() },
       { id: 'hint', label: 'Hint', action: () => this._toggleHint() },
       { id: 'resign', label: 'Resign', action: () => this._resign() },
     ];
+
+    // Container for normal buttons (hidden when new game setup is shown)
+    this._leftPanelButtonsContainer = document.createElement('div');
+    this._leftPanelButtonsContainer.className = 'left-panel-buttons-inner';
 
     const secondaryIds = new Set(['settings', 'save', 'load']);
     for (const { id, label, action } of buttons) {
@@ -153,7 +162,7 @@ export class GameController {
       btn.id = `btn-${id}`;
       btn.textContent = label;
       btn.addEventListener('click', action);
-      this._leftPanelEl.appendChild(btn);
+      this._leftPanelButtonsContainer.appendChild(btn);
       if (id === 'hint') {
         this._hintBtnEl = btn;
         btn.style.display = 'none';
@@ -198,9 +207,214 @@ export class GameController {
 
     sliderContainer.appendChild(this._depthValueEl);
     sliderContainer.appendChild(this._depthSliderEl);
-    this._leftPanelEl.appendChild(sliderContainer);
+    this._leftPanelButtonsContainer.appendChild(sliderContainer);
+
+    // Analyze Game button (shown only after game over)
+    this._analyzeBtnEl = document.createElement('button');
+    this._analyzeBtnEl.className = 'panel-btn';
+    this._analyzeBtnEl.id = 'btn-analyze';
+    this._analyzeBtnEl.textContent = 'Analyze Game';
+    this._analyzeBtnEl.style.display = 'none';
+    this._analyzeBtnEl.addEventListener('click', () => this._handleAnalyzeClick());
+    this._leftPanelButtonsContainer.appendChild(this._analyzeBtnEl);
+
+    // Inline time picker for analysis (hidden by default, shown inside left panel)
+    this._inlineTimePicker = document.createElement('div');
+    this._inlineTimePicker.className = 'analysis-time-picker';
+    this._inlineTimePicker.style.display = 'none';
+
+    const tpLabel = document.createElement('div');
+    tpLabel.className = 'depth-label';
+    tpLabel.textContent = 'Seconds per move:';
+
+    const tpOptions = document.createElement('div');
+    tpOptions.className = 'analysis-time-options';
+
+    this._inlineSelectedTime = 3000;
+    this._inlineTimeBtns = [];
+    for (const { label, ms } of [{ label: '1s', ms: 1000 }, { label: '3s', ms: 3000 }, { label: '5s', ms: 5000 }, { label: '10s', ms: 10000 }]) {
+      const btn = document.createElement('button');
+      btn.className = 'analysis-time-btn';
+      if (ms === 3000) btn.classList.add('selected');
+      btn.textContent = label;
+      btn.addEventListener('click', () => {
+        this._inlineSelectedTime = ms;
+        for (const b of this._inlineTimeBtns) b.classList.remove('selected');
+        btn.classList.add('selected');
+      });
+      tpOptions.appendChild(btn);
+      this._inlineTimeBtns.push(btn);
+    }
+
+    const startBtn = document.createElement('button');
+    startBtn.className = 'panel-btn';
+    startBtn.textContent = 'Start Analysis';
+    startBtn.addEventListener('click', () => {
+      this._inlineTimePicker.style.display = 'none';
+      this._runPostGameAnalysis(this._inlineSelectedTime);
+    });
+
+    this._inlineTimePicker.appendChild(tpLabel);
+    this._inlineTimePicker.appendChild(tpOptions);
+    this._inlineTimePicker.appendChild(startBtn);
+    this._leftPanelButtonsContainer.appendChild(this._inlineTimePicker);
+    this._leftPanelEl.appendChild(this._leftPanelButtonsContainer);
+
+    // Inline new game setup (replaces popup overlay)
+    this._newGameSetup = document.createElement('div');
+    this._newGameSetup.className = 'inline-new-game-setup';
+    this._newGameSetup.style.display = 'none';
+
+    // --- Play As section ---
+    const ngColorLabel = document.createElement('div');
+    ngColorLabel.className = 'setup-section-label';
+    ngColorLabel.textContent = 'Play As';
+
+    const ngColorRow = document.createElement('div');
+    ngColorRow.className = 'setup-color-row';
+
+    this._ngWhiteBtn = document.createElement('button');
+    this._ngWhiteBtn.className = 'setup-color-btn selected';
+    this._ngWhiteBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}pieces/wK.svg" alt="White" class="setup-color-king"><span>White</span>`;
+    this._ngWhiteBtn.addEventListener('click', () => this._ngSelectColor('w'));
+
+    this._ngBlackBtn = document.createElement('button');
+    this._ngBlackBtn.className = 'setup-color-btn';
+    this._ngBlackBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}pieces/bK.svg" alt="Black" class="setup-color-king"><span>Black</span>`;
+    this._ngBlackBtn.addEventListener('click', () => this._ngSelectColor('b'));
+
+    ngColorRow.appendChild(this._ngWhiteBtn);
+    ngColorRow.appendChild(this._ngBlackBtn);
+
+    // --- Difficulty section ---
+    const ngDiffLabel = document.createElement('div');
+    ngDiffLabel.className = 'setup-section-label';
+    ngDiffLabel.textContent = 'Opponent';
+
+    this._ngSelectedColor = this.settings.playerColor;
+    this._ngSelectedDifficulty = this.settings.difficulty;
+
+    this._ngDiffSelect = document.createElement('select');
+    this._ngDiffSelect.className = 'setup-diff-select';
+    for (const level of DIFFICULTY_LEVELS) {
+      const opt = document.createElement('option');
+      opt.value = level.id;
+      opt.textContent = level.label;
+      if (level.id === this._ngSelectedDifficulty) opt.selected = true;
+      this._ngDiffSelect.appendChild(opt);
+    }
+    this._ngDiffSelect.addEventListener('change', () => {
+      this._ngSelectedDifficulty = parseInt(this._ngDiffSelect.value);
+    });
+
+    // --- Time Control section ---
+    const ngTimeLabel = document.createElement('div');
+    ngTimeLabel.className = 'setup-section-label';
+    ngTimeLabel.textContent = 'Time Control';
+
+    const ngTimeGrid = document.createElement('div');
+    ngTimeGrid.className = 'setup-time-grid';
+
+    this._ngSelectedTime = this.settings.timeControl || 0;
+    this._ngTimeBtns = [];
+    for (const tc of TIME_CONTROLS) {
+      if (tc.minutes === 0) continue; // "None" handled separately below
+      const btn = document.createElement('button');
+      btn.className = 'setup-time-btn' + (tc.minutes === this._ngSelectedTime ? ' selected' : '');
+      btn.dataset.minutes = tc.minutes;
+      btn.textContent = tc.label;
+      btn.addEventListener('click', () => {
+        this._ngSelectedTime = tc.minutes;
+        for (const b of this._ngTimeBtns) b.classList.toggle('selected', parseInt(b.dataset.minutes) === tc.minutes);
+      });
+      ngTimeGrid.appendChild(btn);
+      this._ngTimeBtns.push(btn);
+    }
+
+    // No time limit button (infinity)
+    const ngNoTimeBtn = document.createElement('button');
+    ngNoTimeBtn.className = 'setup-time-btn setup-time-btn-infinite' + (this._ngSelectedTime === 0 ? ' selected' : '');
+    ngNoTimeBtn.dataset.minutes = 0;
+    ngNoTimeBtn.innerHTML = '&#8734;';
+    ngNoTimeBtn.addEventListener('click', () => {
+      this._ngSelectedTime = 0;
+      for (const b of this._ngTimeBtns) b.classList.toggle('selected', parseInt(b.dataset.minutes) === 0);
+    });
+    this._ngTimeBtns.push(ngNoTimeBtn);
+
+    // --- Action buttons ---
+    const ngBtnRow = document.createElement('div');
+    ngBtnRow.className = 'setup-action-row';
+
+    const ngStartBtn = document.createElement('button');
+    ngStartBtn.className = 'panel-btn';
+    ngStartBtn.textContent = 'Start Game';
+    ngStartBtn.addEventListener('click', () => {
+      this.state.playerColor = this._ngSelectedColor;
+      this.state.difficulty = this._ngSelectedDifficulty;
+      this.state.timeControl = this._ngSelectedTime;
+      this.settings.playerColor = this._ngSelectedColor;
+      this.settings.difficulty = this._ngSelectedDifficulty;
+      this.settings.timeControl = this._ngSelectedTime;
+      this._saveSettings();
+      this._hideNewGameSetup();
+      this._startGame();
+    });
+
+    const ngCancelBtn = document.createElement('button');
+    ngCancelBtn.className = 'panel-btn panel-btn-secondary';
+    ngCancelBtn.textContent = 'Cancel';
+    ngCancelBtn.addEventListener('click', () => this._hideNewGameSetup());
+
+    ngBtnRow.appendChild(ngStartBtn);
+    ngBtnRow.appendChild(ngCancelBtn);
+
+    // Divider helper
+    const divider = () => {
+      const d = document.createElement('div');
+      d.className = 'setup-divider';
+      return d;
+    };
+
+    this._newGameSetup.appendChild(ngColorLabel);
+    this._newGameSetup.appendChild(ngColorRow);
+    this._newGameSetup.appendChild(divider());
+    this._newGameSetup.appendChild(ngDiffLabel);
+    this._newGameSetup.appendChild(this._ngDiffSelect);
+    this._newGameSetup.appendChild(divider());
+    this._newGameSetup.appendChild(ngTimeLabel);
+    this._newGameSetup.appendChild(ngTimeGrid);
+    this._newGameSetup.appendChild(ngNoTimeBtn);
+    this._newGameSetup.appendChild(divider());
+    this._newGameSetup.appendChild(ngBtnRow);
+    this._leftPanelEl.appendChild(this._newGameSetup);
 
     container.appendChild(this._leftPanelEl);
+  }
+
+  _ngSelectColor(color) {
+    this._ngSelectedColor = color;
+    this._ngWhiteBtn.classList.toggle('selected', color === 'w');
+    this._ngBlackBtn.classList.toggle('selected', color === 'b');
+  }
+
+  _showNewGameSetup() {
+    // Sync current settings
+    this._ngSelectedColor = this.settings.playerColor;
+    this._ngSelectedDifficulty = this.settings.difficulty;
+    this._ngSelectedTime = this.settings.timeControl || 0;
+    this._ngSelectColor(this._ngSelectedColor);
+    this._ngDiffSelect.value = this._ngSelectedDifficulty;
+    for (const b of this._ngTimeBtns) b.classList.toggle('selected', parseInt(b.dataset.minutes) === this._ngSelectedTime);
+
+    // Hide normal buttons, show setup
+    this._leftPanelButtonsContainer.style.display = 'none';
+    this._newGameSetup.style.display = 'flex';
+  }
+
+  _hideNewGameSetup() {
+    this._newGameSetup.style.display = 'none';
+    this._leftPanelButtonsContainer.style.display = 'flex';
   }
 
   _buildBelowBoard(container) {
@@ -222,6 +436,7 @@ export class GameController {
     this._replayEl.appendChild(prevBtn);
     this._replayEl.appendChild(nextBtn);
     container.appendChild(this._replayEl);
+
   }
 
   _buildGameInfo(container) {
@@ -277,8 +492,8 @@ export class GameController {
     const date = new Date();
     const dateStr = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
     const isWhite = this.state.lastPlayerColor === 'w';
-    const white = isWhite ? 'You' : `Stockfish (Level ${this.state.lastDifficulty})`;
-    const black = isWhite ? `Stockfish (Level ${this.state.lastDifficulty})` : 'You';
+    const white = isWhite ? 'You' : `Stockfish (${getDifficultyLabel(this.state.lastDifficulty)})`;
+    const black = isWhite ? `Stockfish (${getDifficultyLabel(this.state.lastDifficulty)})` : 'You';
 
     let result = '*';
     if (this.state.phase === 'over') {
@@ -385,12 +600,14 @@ export class GameController {
   // --- Game Flow ---
 
   _showNewGameDialog() {
-    this.setupScreen.show(this.state.playerColor, this.state.difficulty);
+    this._showNewGameSetup();
   }
 
   _startGame() {
     this.setupScreen.hide();
     this.gameOverOverlay.hide();
+    this._analyzeBtnEl.style.display = 'none';
+    this._inlineTimePicker.style.display = 'none';
     this.analysisGraph.hide();
     this.state.resetGame();
     this.state.startGame();
@@ -439,6 +656,8 @@ export class GameController {
     this._cancelAnalysis = true;
     this._clearPendingTimeouts();
     this.gameOverOverlay.hide();
+    this._analyzeBtnEl.style.display = 'none';
+    this._inlineTimePicker.style.display = 'none';
     this.analysisGraph.hide();
     this.state.resetGame();
     this.state.playerColor = this.state.lastPlayerColor;
@@ -670,8 +889,31 @@ export class GameController {
     this._hintBtnEl.style.display = 'none';
     this._takeBackBtnEl.style.display = 'none';
     this._resignBtnEl.style.display = 'none';
-    this._replayEl.style.display = 'flex';
-    this.gameOverOverlay.show(this.state.winner, !!this.state.analysisResults);
+    this._replayEl.style.display = 'none';
+
+    // Show analyze button in left panel
+    this._analyzeBtnEl.style.display = 'block';
+    this._analyzeBtnEl.textContent = this.state.analysisResults ? 'View Analysis' : 'Analyze Game';
+    this._inlineTimePicker.style.display = 'none';
+  }
+
+  _handleAnalyzeClick() {
+    if (this.state.analysisResults) {
+      this.analysisGraph.showGraph(this.state.analysisResults.evaluations);
+      this.analysisGraph.setHighlight(this.history.getCurrentViewIndex());
+    } else {
+      // Toggle time picker visibility
+      const isVisible = this._inlineTimePicker.style.display !== 'none';
+      if (isVisible) {
+        this._inlineTimePicker.style.display = 'none';
+      } else {
+        this._inlineSelectedTime = 3000;
+        for (const btn of this._inlineTimeBtns) {
+          btn.classList.toggle('selected', btn.textContent === '3s');
+        }
+        this._inlineTimePicker.style.display = 'flex';
+      }
+    }
   }
 
   _resign() {
@@ -685,14 +927,11 @@ export class GameController {
   async _runPostGameAnalysis(movetime) {
     // If cached results exist, show graph immediately
     if (this.state.analysisResults) {
-      this.gameOverOverlay.hide();
       this.analysisGraph.showGraph(this.state.analysisResults.evaluations);
       this.analysisGraph.setHighlight(this.history.getCurrentViewIndex());
       return;
     }
 
-    // Hide game-over, show progress
-    this.gameOverOverlay.hide();
     this.engine.stopAnalysis();
     this._cancelAnalysis = false;
 
@@ -705,7 +944,6 @@ export class GameController {
     for (let i = 0; i < total; i++) {
       if (this._cancelAnalysis) {
         this.analysisGraph.hide();
-        this.gameOverOverlay.show(this.state.winner, false);
         return;
       }
 
@@ -716,7 +954,6 @@ export class GameController {
 
       if (this._cancelAnalysis) {
         this.analysisGraph.hide();
-        this.gameOverOverlay.show(this.state.winner, false);
         return;
       }
 
@@ -739,6 +976,9 @@ export class GameController {
     this.state.analysisResults = { evaluations, movetime };
     this.analysisGraph.showGraph(evaluations);
     this.analysisGraph.setHighlight(this.history.getCurrentViewIndex());
+
+    // Update the analyze button to "View Analysis" now that results are cached
+    this._analyzeBtnEl.textContent = 'View Analysis';
   }
 
   _takeBack() {
@@ -899,6 +1139,7 @@ export class GameController {
         e.preventDefault();
         this._navigateHistory('forward');
         break;
+      case 'ArrowUp':
       case 'Home':
         e.preventDefault();
         {
@@ -911,6 +1152,7 @@ export class GameController {
           }
         }
         break;
+      case 'ArrowDown':
       case 'End':
         e.preventDefault();
         this.history.goToEnd();
@@ -958,7 +1200,7 @@ export class GameController {
     const opponentName = this._opponentInfo.querySelector('.player-name');
     opponentAvatar.textContent = isWhite ? 'B' : 'W';
     opponentAvatar.className = `player-avatar ${isWhite ? 'black-piece' : 'white-piece'}`;
-    opponentName.textContent = `Stockfish (Level ${difficulty})`;
+    opponentName.textContent = `Stockfish (${getDifficultyLabel(difficulty)})`;
 
     this._playerInfo.style.display = 'flex';
     this._opponentInfo.style.display = 'flex';
@@ -1056,7 +1298,10 @@ export class GameController {
       this._takeBackBtnEl.style.display = this.state.phase === 'over' ? 'none' : 'block';
       this._resignBtnEl.style.display = this.state.phase === 'over' ? 'none' : 'block';
       this._takeBackBtnEl.disabled = this.history.length === 0;
-      this._replayEl.style.display = this.state.phase === 'over' ? 'flex' : 'none';
+      this._replayEl.style.display = 'none';
+      if (this.state.phase === 'over') {
+        this._handleGameOver();
+      }
       this.engine.setDifficulty(this.state.difficulty);
 
       if (this.state.phase === 'playing') {
@@ -1074,7 +1319,13 @@ export class GameController {
     const raw = localStorage.getItem('claude-chess-settings');
     if (raw) {
       try {
-        return { ...DEFAULTS, ...JSON.parse(raw) };
+        const settings = { ...DEFAULTS, ...JSON.parse(raw) };
+        // Migrate old settings to new difficulty/time system
+        if (!('timeControl' in settings)) {
+          settings.difficulty = DEFAULTS.difficulty;
+          settings.timeControl = 0;
+        }
+        return settings;
       } catch (e) {
         // ignore
       }
@@ -1089,6 +1340,7 @@ export class GameController {
       soundEnabled: this.settings.soundEnabled,
       playerColor: this.settings.playerColor,
       difficulty: this.settings.difficulty,
+      timeControl: this.settings.timeControl || 0,
     }));
   }
 }
