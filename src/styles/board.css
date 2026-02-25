@@ -77,6 +77,12 @@
   border-radius: 50%;
 }
 
+/* Hover highlight on legal move squares */
+.square.legal-hover {
+  box-shadow: inset 0 0 0 4px rgba(50, 200, 50, 0.8);
+  background-color: rgba(50, 200, 50, 0.25) !important;
+}
+
 /* Hint highlights */
 .square.hint-from {
   background-color: rgba(0, 220, 0, 0.3) !important;

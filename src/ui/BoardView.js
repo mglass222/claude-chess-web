@@ -92,6 +92,10 @@ export class BoardView {
         // Click handler
         sq.addEventListener('mousedown', (e) => this._onMouseDown(e, squareName));
 
+        // Hover handler for legal move highlighting
+        sq.addEventListener('mouseenter', () => this._onSquareHover(squareName));
+        sq.addEventListener('mouseleave', () => this._onSquareHoverEnd(squareName));
+
         this.boardEl.appendChild(sq);
         this.squares[squareName] = sq;
       }
@@ -282,7 +286,7 @@ export class BoardView {
   clearLegalMoves() {
     for (const sq of this.legalMoves) {
       if (this.squares[sq]) {
-        this.squares[sq].classList.remove('legal-move', 'legal-capture');
+        this.squares[sq].classList.remove('legal-move', 'legal-capture', 'legal-hover');
       }
     }
     this.legalMoves = [];
@@ -366,6 +370,16 @@ export class BoardView {
     return this._animating;
   }
 
+  _onSquareHover(square) {
+    if (this.legalMoves.includes(square)) {
+      this.squares[square].classList.add('legal-hover');
+    }
+  }
+
+  _onSquareHoverEnd(square) {
+    this.squares[square].classList.remove('legal-hover');
+  }
+
   // Mouse / touch input
   _onMouseDown(e, square) {
     if (this._animating) return;
@@ -374,11 +388,16 @@ export class BoardView {
 
     const pieceEl = this.pieces[square];
 
-    // Start drag if there's a piece
+    // If a piece can be dragged, prepare for drag but don't start yet.
+    // Drag only begins once the mouse moves (to distinguish click from drag).
     if (pieceEl && this.onPieceDragStart) {
       const canDrag = this.onPieceDragStart(square);
       if (canDrag) {
-        this._startDrag(e, square, pieceEl);
+        this._pendingDrag = { square, pieceEl, startX: e.clientX, startY: e.clientY };
+        // Select the piece immediately so legal moves show
+        if (this.onSquareClick) {
+          this.onSquareClick(square);
+        }
         return;
       }
     }
@@ -405,11 +424,6 @@ export class BoardView {
 
     // Dim original
     pieceEl.style.opacity = '0.3';
-
-    // Show legal moves
-    if (this.onSquareClick) {
-      this.onSquareClick(square);
-    }
   }
 
   _positionGhost(clientX, clientY, size) {
@@ -420,11 +434,28 @@ export class BoardView {
   }
 
   _onMouseMove(e) {
+    // If we have a pending drag and mouse moved enough, start the actual drag
+    if (this._pendingDrag && !this._dragging) {
+      const dx = e.clientX - this._pendingDrag.startX;
+      const dy = e.clientY - this._pendingDrag.startY;
+      if (dx * dx + dy * dy > 9) { // 3px threshold
+        this._startDrag(e, this._pendingDrag.square, this._pendingDrag.pieceEl);
+        this._pendingDrag = null;
+      }
+      return;
+    }
+
     if (!this._dragging || !this._dragGhost) return;
     this._positionGhost(e.clientX, e.clientY);
   }
 
   _onMouseUp(e) {
+    // If mouse released without dragging, it was a click — already handled in mousedown
+    if (this._pendingDrag) {
+      this._pendingDrag = null;
+      return;
+    }
+
     if (!this._dragging) return;
 
     // Find which square was dropped on
