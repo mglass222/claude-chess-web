@@ -437,8 +437,10 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 4px 0;
+  padding: 8px 0;
   margin-left: 52px; /* align with board (eval bar width + gap) */
+  max-width: min(80vh, 700px);
+  position: relative;
 }
 
 .player-avatar {
@@ -470,6 +472,95 @@
   font-weight: 500;
   color: var(--panel-text);
 }
+
+/* Chess Clocks — sizes proportional to the board (min(80vh, 700px)) */
+.chess-clock {
+  position: absolute;
+  right: 0;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: min(1vh, 8px);
+  padding: min(0.75vh, 6px) min(2vh, 16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: min(14vh, 120px);
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.chess-clock::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.03), transparent);
+  pointer-events: none;
+}
+
+.chess-clock-digits {
+  font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: min(3vh, 26px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: rgba(212, 208, 200, 0.5);
+  transition: color 0.3s ease;
+  position: relative;
+  z-index: 1;
+}
+
+/* Active clock — warm gold glow */
+.chess-clock.active {
+  background: rgba(196, 154, 108, 0.1);
+  border-color: rgba(196, 154, 108, 0.3);
+  box-shadow: 0 0 16px rgba(196, 154, 108, 0.12), inset 0 0 12px rgba(196, 154, 108, 0.04);
+}
+
+.chess-clock.active .chess-clock-digits {
+  color: var(--accent);
+}
+
+/* Low time — subtle amber warning */
+.chess-clock.low-time {
+  border-color: rgba(230, 160, 50, 0.35);
+}
+
+.chess-clock.low-time .chess-clock-digits {
+  color: #e6a032;
+}
+
+/* Critical time — red pulse */
+.chess-clock.critical-time {
+  border-color: rgba(220, 80, 60, 0.4);
+  animation: clockPulse 1s ease-in-out infinite;
+}
+
+.chess-clock.critical-time .chess-clock-digits {
+  color: #dc503c;
+}
+
+@keyframes clockPulse {
+  0%, 100% {
+    background: rgba(220, 80, 60, 0.08);
+    box-shadow: 0 0 12px rgba(220, 80, 60, 0.1);
+  }
+  50% {
+    background: rgba(220, 80, 60, 0.16);
+    box-shadow: 0 0 20px rgba(220, 80, 60, 0.2);
+  }
+}
+
+/* Flagged — time expired */
+.chess-clock.flagged {
+  background: rgba(220, 80, 60, 0.12);
+  border-color: rgba(220, 80, 60, 0.3);
+  animation: none;
+}
+
+.chess-clock.flagged .chess-clock-digits {
+  color: #dc503c;
+}
+
 
 /* Game Info (FEN + PGN) */
 .game-info {

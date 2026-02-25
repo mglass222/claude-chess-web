@@ -11,6 +11,7 @@ import { SetupScreen } from '../ui/SetupScreen.js';
 import { GameOverOverlay } from '../ui/GameOverOverlay.js';
 import { SettingsDialog } from '../ui/SettingsDialog.js';
 import { SoundManager } from '../ui/SoundManager.js';
+import { ChessClock } from '../ui/ChessClock.js';
 import { DEFAULTS, DIFFICULTY_LEVELS, TIME_CONTROLS, ANALYSIS_DEPTH_MIN, ANALYSIS_DEPTH_MAX, evalToCp, getDifficultyLabel } from '../config.js';
 
 export class GameController {
@@ -32,6 +33,7 @@ export class GameController {
     this.setupScreen = null;
     this.gameOverOverlay = null;
     this.settingsDialog = null;
+    this.chessClock = null;
 
     // Left panel buttons
     this._leftPanelEl = null;
@@ -95,6 +97,10 @@ export class GameController {
     this._playerInfo = this._buildPlayerInfo('player');
     boardColumn.insertBefore(this._playerInfo, document.getElementById('below-board'));
 
+    // Chess clocks (each placed on its color's side of the board)
+    this.chessClock = new ChessClock(this._playerInfo, this._opponentInfo);
+    this.chessClock.onTimeOut = (color) => this._handleTimeOut(color);
+
     // Left panel buttons
     this._buildLeftPanel(leftPanel);
 
@@ -109,12 +115,7 @@ export class GameController {
     this.gameOverOverlay = new GameOverOverlay(boardArea);
     this.settingsDialog = new SettingsDialog(appContainer);
 
-    // Settings gear icon (top-right)
-    this._settingsGear = document.createElement('button');
-    this._settingsGear.className = 'settings-gear';
-    this._settingsGear.innerHTML = `<svg width="28" height="28" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" stroke="currentColor" stroke-width="1.5"/><path d="M16.17 12.5a1.39 1.39 0 00.28 1.53l.05.05a1.69 1.69 0 11-2.39 2.39l-.05-.05a1.39 1.39 0 00-1.53-.28 1.39 1.39 0 00-.84 1.27v.14a1.69 1.69 0 11-3.38 0v-.07a1.39 1.39 0 00-.91-1.27 1.39 1.39 0 00-1.53.28l-.05.05a1.69 1.69 0 11-2.39-2.39l.05-.05a1.39 1.39 0 00.28-1.53 1.39 1.39 0 00-1.27-.84h-.14a1.69 1.69 0 110-3.38h.07a1.39 1.39 0 001.27-.91 1.39 1.39 0 00-.28-1.53l-.05-.05a1.69 1.69 0 112.39-2.39l.05.05a1.39 1.39 0 001.53.28h.07a1.39 1.39 0 00.84-1.27v-.14a1.69 1.69 0 013.38 0v.07a1.39 1.39 0 00.84 1.27 1.39 1.39 0 001.53-.28l.05-.05a1.69 1.69 0 112.39 2.39l-.05.05a1.39 1.39 0 00-.28 1.53v.07a1.39 1.39 0 001.27.84h.14a1.69 1.69 0 110 3.38h-.07a1.39 1.39 0 00-1.27.84z" stroke="currentColor" stroke-width="1.5"/></svg>`;
-    this._settingsGear.addEventListener('click', () => this._openSettings());
-    boardArea.appendChild(this._settingsGear);
+    // Settings button (added to left panel in _buildLeftPanel)
 
     // Build below-board area (hint + replay)
     this._buildBelowBoard(belowBoard);
@@ -177,6 +178,14 @@ export class GameController {
         btn.style.display = 'none';
       }
     }
+
+    // Settings button (below resign)
+    const settingsBtn = document.createElement('button');
+    settingsBtn.className = 'panel-btn panel-btn-secondary';
+    settingsBtn.id = 'btn-settings';
+    settingsBtn.textContent = 'Settings';
+    settingsBtn.addEventListener('click', () => this._openSettings());
+    this._leftPanelButtonsContainer.appendChild(settingsBtn);
 
     // Depth slider
     const sliderContainer = document.createElement('div');
@@ -643,18 +652,32 @@ export class GameController {
     // Update player info
     this._updatePlayerInfos();
 
+    // Initialize chess clocks
+    const timeMinutes = this.state.timeControl || this.settings.timeControl || 0;
+    this.chessClock.init(timeMinutes, this.state.playerColor);
+
     // Start analysis
     this._startAnalysis();
 
     // If player is black, AI makes first move
     if (this.state.playerColor === 'b') {
+      // Start black's clock (the AI) right away
+      if (this.chessClock.isActive) {
+        this.chessClock.startClock('b');
+      }
       this._setTimeout(() => this._makeAIMove(), 300);
+    } else {
+      // Start white's clock (the player)
+      if (this.chessClock.isActive) {
+        this.chessClock.startClock('w');
+      }
     }
   }
 
   _restart() {
     this._cancelAnalysis = true;
     this._clearPendingTimeouts();
+    this.chessClock.stop();
     this.gameOverOverlay.hide();
     this._analyzeBtnEl.style.display = 'none';
     this._inlineTimePicker.style.display = 'none';
@@ -692,6 +715,7 @@ export class GameController {
   _newGame() {
     this._cancelAnalysis = true;
     this._clearPendingTimeouts();
+    this.chessClock.stop();
     this.engine.stopAnalysis();
     this._showNewGameDialog();
   }
@@ -812,6 +836,11 @@ export class GameController {
       return;
     }
 
+    // Switch the clock to the next player's turn
+    if (this.chessClock.isActive) {
+      this.chessClock.switchTo(this.state.turn);
+    }
+
     // If it's the AI's turn, stop any running analysis immediately and
     // schedule the AI move. Stopping now prevents stale analysis commands
     // from racing with the upcoming getMove() call.
@@ -880,12 +909,18 @@ export class GameController {
       return;
     }
 
+    // Switch clock to the player's turn
+    if (this.chessClock.isActive) {
+      this.chessClock.switchTo(this.state.turn);
+    }
+
     // Restart analysis
     this._startAnalysis();
   }
 
   _handleGameOver() {
     this.engine.stopAnalysis();
+    this.chessClock.stop();
     this._hintBtnEl.style.display = 'none';
     this._takeBackBtnEl.style.display = 'none';
     this._resignBtnEl.style.display = 'none';
@@ -914,6 +949,15 @@ export class GameController {
         this._inlineTimePicker.style.display = 'flex';
       }
     }
+  }
+
+  _handleTimeOut(color) {
+    if (this.state.phase !== 'playing') return;
+    this._clearPendingTimeouts();
+    this.state.phase = 'over';
+    // The player who ran out of time loses
+    this.state.winner = color === 'w' ? 'Black' : 'White';
+    this._handleGameOver();
   }
 
   _resign() {
@@ -1020,6 +1064,11 @@ export class GameController {
 
     // Disable take back if no moves left
     this._takeBackBtnEl.disabled = this.history.length === 0;
+
+    // Switch clock to current turn after take-back
+    if (this.chessClock.isActive) {
+      this.chessClock.switchTo(this.state.turn);
+    }
 
     // Restart analysis
     this._startAnalysis();
@@ -1229,6 +1278,7 @@ export class GameController {
     document.removeEventListener('keydown', this._boundKeyboard);
     this.boardView.destroy();
     this.evalBar.destroy();
+    this.chessClock.destroy();
     this.engine.destroy();
   }
 
@@ -1290,6 +1340,8 @@ export class GameController {
       this.boardView.renderPosition(this.state.board, this.state.playerColor);
       this.evalBar.setPlayerColor(this.state.playerColor);
       this.evalBar.reset();
+      // Hide clocks on load (time state is not preserved in saves)
+      this.chessClock.hide();
       this.moveList.render(this.history);
       this._gameInfoEl.style.display = 'flex';
       this._updateGameInfo();
