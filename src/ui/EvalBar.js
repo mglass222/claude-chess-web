@@ -13,6 +13,7 @@ export class EvalBar {
     this._animating = false;
     this._rafId = null;
     this._depthMet = false;
+    this._maxDepthSeen = 0;
 
     this._build();
   }
@@ -70,6 +71,7 @@ export class EvalBar {
     if (!evaluation) {
       this._showCalculating();
       this._depthMet = false;
+      this._maxDepthSeen = 0;
       return;
     }
 
@@ -80,6 +82,12 @@ export class EvalBar {
       this._showCalculating();
       return;
     }
+
+    // Only accept monotonically increasing depths — ignore stale shallower lines
+    if (depth !== undefined && depth < this._maxDepthSeen) {
+      return;
+    }
+    this._maxDepthSeen = depth || this._maxDepthSeen;
 
     let newCp;
     if (mate !== null && mate !== undefined) {
@@ -189,6 +197,7 @@ export class EvalBar {
     this._mateIn = null;
     this._animating = false;
     this._depthMet = false;
+    this._maxDepthSeen = 0;
     this._updateBar(0);
     this.scoreLabel.textContent = '0.0';
     this.scoreLabel.className = 'eval-score white-advantage';

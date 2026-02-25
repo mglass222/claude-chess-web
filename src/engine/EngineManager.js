@@ -101,6 +101,11 @@ export class EngineManager {
     const tokens = line.split(' ');
     const info = {};
 
+    // Skip aspiration window failures — scores are unreliable
+    if (tokens.includes('upperbound') || tokens.includes('lowerbound')) {
+      return null;
+    }
+
     for (let i = 0; i < tokens.length; i++) {
       if (tokens[i] === 'depth') {
         info.depth = parseInt(tokens[i + 1], 10);
