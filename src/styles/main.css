@@ -106,6 +106,13 @@ body::after {
   justify-content: flex-start;
   padding: 40px 0 10px;
   position: relative;
+  transition: filter 0.3s ease;
+}
+
+#board-column.board-inactive {
+  filter: blur(4px) brightness(0.6);
+  pointer-events: none;
+  transition: filter 0.3s ease;
 }
 
 #board-row {

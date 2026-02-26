@@ -275,7 +275,7 @@ export class GameController {
     // --- Difficulty section ---
     const ngDiffLabel = document.createElement('div');
     ngDiffLabel.className = 'setup-section-label';
-    ngDiffLabel.textContent = 'Opponent';
+    ngDiffLabel.textContent = 'Difficulty';
 
     this._ngSelectedColor = this.settings.playerColor;
     this._ngSelectedDifficulty = this.settings.difficulty;
@@ -290,6 +290,11 @@ export class GameController {
       this._ngDiffSelect.appendChild(opt);
     }
     this._ngDiffSelect.addEventListener('change', () => {
+      this._ngSelectedDifficulty = parseInt(this._ngDiffSelect.value);
+      this._ngSelectEngineMode('difficulty');
+    });
+    // Also switch mode when clicking the dropdown even if the value doesn't change
+    this._ngDiffSelect.addEventListener('mousedown', () => {
       this._ngSelectedDifficulty = parseInt(this._ngDiffSelect.value);
       this._ngSelectEngineMode('difficulty');
     });
@@ -452,11 +457,19 @@ export class GameController {
     // Hide normal buttons, show setup
     this._leftPanelButtonsContainer.style.display = 'none';
     this._newGameSetup.style.display = 'flex';
+
+    // Blur and deactivate the board
+    const boardColumn = document.getElementById('board-column');
+    boardColumn.classList.add('board-inactive');
   }
 
   _hideNewGameSetup() {
     this._newGameSetup.style.display = 'none';
     this._leftPanelButtonsContainer.style.display = 'flex';
+
+    // Restore the board
+    const boardColumn = document.getElementById('board-column');
+    boardColumn.classList.remove('board-inactive');
   }
 
   _buildBelowBoard(container) {
