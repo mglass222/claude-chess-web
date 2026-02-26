@@ -546,9 +546,12 @@ export class BoardView {
     if (!this._dragging) return;
     const touch = e.changedTouches[0];
     const target = this._getSquareFromPoint(touch.clientX, touch.clientY);
+    const fromSquare = this._dragFrom;
     this._cleanupDrag();
 
-    if (target && target !== this._dragFrom && this.onSquareClick) {
+    // Only fire click if dragged to a different square (tap-on-same-square
+    // is already handled by _onTouchStart, firing again would deselect)
+    if (target && target !== fromSquare && this.onSquareClick) {
       this.onSquareClick(target);
     }
   }
