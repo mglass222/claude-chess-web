@@ -203,6 +203,13 @@ export class GameController {
     this._pgnCopyBtn.addEventListener('click', () => this._copyToClipboard(this._generatePgn(), this._pgnCopyBtn));
     this._leftPanelButtonsContainer.appendChild(this._pgnCopyBtn);
 
+    // FEN button below PGN
+    this._fenCopyBtn = document.createElement('button');
+    this._fenCopyBtn.className = 'panel-btn fen-btn';
+    this._fenCopyBtn.textContent = 'Copy FEN';
+    this._fenCopyBtn.addEventListener('click', () => this._copyToClipboard(this._getCurrentFen(), this._fenCopyBtn));
+    this._leftPanelButtonsContainer.appendChild(this._fenCopyBtn);
+
     // Analyze Game button (shown only after game over)
     this._analyzeBtnEl = document.createElement('button');
     this._analyzeBtnEl.className = 'panel-btn';
@@ -500,39 +507,18 @@ export class GameController {
     this._replayEl.appendChild(nextBtn);
     container.appendChild(this._replayEl);
 
-    // FEN bar below board
-    this._buildFenBar(container);
   }
 
-  _buildFenBar(container) {
-    this._fenBarEl = document.createElement('div');
-    this._fenBarEl.className = 'fen-bar';
-    this._fenBarEl.style.display = 'none';
-
-    this._fenInputEl = document.createElement('input');
-    this._fenInputEl.type = 'text';
-    this._fenInputEl.className = 'fen-input fen-input-wide';
-    this._fenInputEl.readOnly = true;
-
-    this._fenCopyBtn = document.createElement('button');
-    this._fenCopyBtn.className = 'copy-btn';
-    this._fenCopyBtn.textContent = 'Copy FEN';
-    this._fenCopyBtn.addEventListener('click', () => this._copyToClipboard(this._fenInputEl.value, this._fenCopyBtn));
-
-    this._fenBarEl.appendChild(this._fenInputEl);
-    this._fenBarEl.appendChild(this._fenCopyBtn);
-    container.appendChild(this._fenBarEl);
+  _getCurrentFen() {
+    const viewIdx = this.history.getCurrentViewIndex();
+    if (viewIdx >= 0 && viewIdx < this.history.moves.length) {
+      return this.history.moves[viewIdx].fen || this.state.fen;
+    }
+    return this.state.fen;
   }
 
   _updateGameInfo() {
-    if (!this._fenInputEl) return;
-    // Show FEN for the currently viewed position
-    const viewIdx = this.history.getCurrentViewIndex();
-    if (viewIdx >= 0 && viewIdx < this.history.moves.length) {
-      this._fenInputEl.value = this.history.moves[viewIdx].fen || this.state.fen;
-    } else {
-      this._fenInputEl.value = this.state.fen;
-    }
+    // No-op: FEN bar removed, FEN is now copied via left panel button
   }
 
   _generatePgn() {
@@ -694,7 +680,6 @@ export class GameController {
     this._takeBackBtnEl.disabled = true;
     this._resignBtnEl.style.display = 'block';
     this._replayEl.style.display = 'none';
-    this._fenBarEl.style.display = 'flex';
     this._updateGameInfo();
 
     // Reset eval bar
@@ -1444,7 +1429,6 @@ export class GameController {
       // Hide clocks on load (time state is not preserved in saves)
       this.chessClock.hide();
       this.moveList.render(this.history);
-      this._fenBarEl.style.display = 'flex';
       this._updateGameInfo();
       this._leftPanelEl.style.display = 'flex';
       this._hintBtnEl.style.display = this.state.phase === 'over' ? 'none' : 'block';
