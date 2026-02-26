@@ -113,7 +113,7 @@ export class GameController {
 
     // Game info section (FEN + PGN) is built in _buildLeftPanel
 
-    this.analysisGraph = new AnalysisGraph(boardArea);
+    this.analysisGraph = new AnalysisGraph(boardArea, rightPanel);
     this.promotionDialog = new PromotionDialog(boardArea);
     this.promotionDialog.pieceSet = this.settings.pieceSet;
     this.setupScreen = new SetupScreen(appContainer);

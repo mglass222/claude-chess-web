@@ -1,24 +1,26 @@
 export class AnalysisGraph {
-  constructor(container) {
-    this.container = container;
+  constructor(boardArea, rightPanel) {
+    this.boardArea = boardArea;
+    this.rightPanel = rightPanel;
     this.visible = false;
     this.onMoveClick = null;  // callback(moveIndex)
     this.onCancel = null;     // callback()
     this._points = [];
     this._evaluations = null;
+    this._classifications = null;
     this._highlightIndex = -1;
+    this._resizeObserver = null;
     this._build();
   }
 
   _build() {
-    this.overlay = document.createElement('div');
-    this.overlay.className = 'analysis-graph-overlay';
-    this.overlay.style.display = 'none';
+    // --- Progress overlay (on the board) ---
+    this.progressOverlay = document.createElement('div');
+    this.progressOverlay.className = 'analysis-progress-overlay';
+    this.progressOverlay.style.display = 'none';
 
-    // Progress elements
     this.progressEl = document.createElement('div');
     this.progressEl.className = 'analysis-progress';
-    this.progressEl.style.display = 'none';
 
     this.progressText = document.createElement('div');
     this.progressText.className = 'analysis-progress-text';
@@ -40,40 +42,65 @@ export class AnalysisGraph {
     this.progressEl.appendChild(this.progressText);
     this.progressEl.appendChild(barOuter);
     this.progressEl.appendChild(this.cancelBtn);
+    this.progressOverlay.appendChild(this.progressEl);
+    this.boardArea.appendChild(this.progressOverlay);
 
-    // Graph elements
-    this.graphEl = document.createElement('div');
-    this.graphEl.style.display = 'none';
-    this.graphEl.style.cssText = 'display:none;flex-direction:column;align-items:center;gap:12px;';
+    // --- Graph panel (in right panel, below move list) ---
+    this.graphPanel = document.createElement('div');
+    this.graphPanel.className = 'analysis-graph-panel';
+    this.graphPanel.style.display = 'none';
+
+    const header = document.createElement('div');
+    header.className = 'analysis-graph-header';
+
+    const title = document.createElement('span');
+    title.className = 'analysis-graph-title';
+    title.textContent = 'Analysis';
+
+    this.closeBtn = document.createElement('button');
+    this.closeBtn.className = 'analysis-graph-close-x';
+    this.closeBtn.textContent = '\u00d7';
+    this.closeBtn.addEventListener('click', () => this.hide());
+
+    header.appendChild(title);
+    header.appendChild(this.closeBtn);
 
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'analysis-graph-canvas';
-    this.canvas.width = 700;
-    this.canvas.height = 500;
-
     this.canvas.addEventListener('click', (e) => this._handleCanvasClick(e));
     this.canvas.addEventListener('mousemove', (e) => this._handleCanvasMouseMove(e));
 
-    this.closeBtn = document.createElement('button');
-    this.closeBtn.className = 'analysis-graph-close';
-    this.closeBtn.textContent = 'Close';
-    this.closeBtn.addEventListener('click', () => this.hide());
+    this.graphPanel.appendChild(header);
+    this.graphPanel.appendChild(this.canvas);
+    this.rightPanel.appendChild(this.graphPanel);
 
-    this.graphEl.appendChild(this.canvas);
-    this.graphEl.appendChild(this.closeBtn);
+    // ResizeObserver to keep canvas sized to panel width
+    this._resizeObserver = new ResizeObserver(() => {
+      if (this._evaluations && this.graphPanel.style.display !== 'none') {
+        this._sizeCanvas();
+        this._draw();
+      }
+    });
+    this._resizeObserver.observe(this.graphPanel);
+  }
 
-    this.overlay.appendChild(this.progressEl);
-    this.overlay.appendChild(this.graphEl);
-    this.container.appendChild(this.overlay);
+  _sizeCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = this.graphPanel.getBoundingClientRect();
+    const w = rect.width - 8; // account for padding
+    const h = 180;
+    this.canvas.width = Math.round(w * dpr);
+    this.canvas.height = Math.round(h * dpr);
+    this.canvas.style.width = w + 'px';
+    this.canvas.style.height = h + 'px';
   }
 
   // --- Progress mode ---
 
   showProgress() {
     this.visible = true;
-    this.overlay.style.display = 'flex';
-    this.progressEl.style.display = 'flex';
-    this.graphEl.style.display = 'none';
+    this.progressOverlay.style.display = 'flex';
+    this.graphPanel.style.display = 'none';
     this.progressText.textContent = 'Analyzing...';
     this.progressBarInner.style.width = '0%';
   }
@@ -88,11 +115,12 @@ export class AnalysisGraph {
   showGraph(evaluations) {
     if (!evaluations || evaluations.length < 2) return;
     this._evaluations = evaluations;
+    this._classifications = this._classifyMoves(evaluations);
     this._highlightIndex = -1;
     this.visible = true;
-    this.overlay.style.display = 'flex';
-    this.progressEl.style.display = 'none';
-    this.graphEl.style.display = 'flex';
+    this.progressOverlay.style.display = 'none';
+    this.graphPanel.style.display = 'flex';
+    this._sizeCanvas();
     this._draw();
   }
 
@@ -106,9 +134,46 @@ export class AnalysisGraph {
 
   hide() {
     this.visible = false;
-    this.overlay.style.display = 'none';
-    this.progressEl.style.display = 'none';
-    this.graphEl.style.display = 'none';
+    this.progressOverlay.style.display = 'none';
+    this.graphPanel.style.display = 'none';
+  }
+
+  // --- Move Classification ---
+
+  _classifyMoves(evaluations) {
+    const classifications = new Array(evaluations.length).fill(null);
+    // First position (index 0) is the starting position, no classification
+    for (let i = 1; i < evaluations.length; i++) {
+      const prev = evaluations[i - 1];
+      const curr = evaluations[i];
+      if (prev === null || prev === undefined || curr === null || curr === undefined) continue;
+
+      // Determine which side moved: odd index = white just moved, even = black just moved
+      const whiteJustMoved = (i % 2 === 1);
+
+      // Centipawn loss from the moving side's perspective
+      // Positive eval = good for white. If white moved, loss = prev - curr. If black moved, loss = curr - prev.
+      const cpLoss = whiteJustMoved ? (prev - curr) : (curr - prev);
+
+      // Position eval from the moving side's perspective before the move
+      const posBefore = whiteJustMoved ? prev : -prev;
+
+      if (cpLoss >= 200) {
+        classifications[i] = { type: 'blunder', color: '#ca3431' };
+      } else if (cpLoss >= 50) {
+        classifications[i] = { type: 'mistake', color: '#e6a817' };
+      } else if (cpLoss < 10) {
+        if (posBefore < -300) {
+          classifications[i] = { type: 'brilliant', color: '#1bada6' };
+        } else if (posBefore < -100) {
+          classifications[i] = { type: 'great', color: '#3c6eb4' };
+        } else {
+          classifications[i] = { type: 'excellent', color: '#5dab47' };
+        }
+      }
+      // 10-50 cp loss = normal, no dot (null)
+    }
+    return classifications;
   }
 
   // --- Drawing ---
@@ -120,61 +185,20 @@ export class AnalysisGraph {
     const ctx = this.canvas.getContext('2d');
     const W = this.canvas.width;
     const H = this.canvas.height;
-    const margin = { top: 40, right: 30, bottom: 40, left: 50 };
-    const gw = W - margin.left - margin.right;
-    const gh = H - margin.top - margin.bottom;
+    const dpr = window.devicePixelRatio || 1;
+    const margin = 4 * dpr;
+    const gw = W - margin * 2;
+    const gh = H - margin * 2;
 
-    // Clear
-    ctx.fillStyle = '#28283a';
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    // Background
+    ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, W, H);
 
-    // Border
-    ctx.strokeStyle = '#64647a';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(margin.left, margin.top, gw, gh);
-
-    const centerY = margin.top + gh / 2;
+    const centerY = margin + gh / 2;
     const clamp = 1000; // +/- 10 pawns
-
-    // Grid lines
-    ctx.strokeStyle = '#3c3c50';
-    ctx.lineWidth = 1;
-    for (const pawnVal of [2, 4, 6, 8]) {
-      for (const sign of [1, -1]) {
-        const y = centerY - (sign * pawnVal * gh / 2 / 10);
-        if (y > margin.top && y < margin.top + gh) {
-          ctx.beginPath();
-          ctx.moveTo(margin.left, y);
-          ctx.lineTo(margin.left + gw, y);
-          ctx.stroke();
-        }
-      }
-    }
-
-    // Center line
-    ctx.strokeStyle = '#666';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(margin.left, centerY);
-    ctx.lineTo(margin.left + gw, centerY);
-    ctx.stroke();
-
-    // Title
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 18px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('Game Analysis', W / 2, margin.top - 12);
-
-    // Y-axis labels
-    ctx.fillStyle = '#999';
-    ctx.font = '11px Arial';
-    ctx.textAlign = 'right';
-    for (let p = -10; p <= 10; p += 2) {
-      const y = centerY - (p * gh / 2 / 10);
-      if (y >= margin.top && y <= margin.top + gh) {
-        ctx.fillText((p > 0 ? '+' : '') + p, margin.left - 8, y + 4);
-      }
-    }
 
     // Build points
     const total = evaluations.length;
@@ -184,46 +208,59 @@ export class AnalysisGraph {
     for (let i = 0; i < total; i++) {
       const ev = evaluations[i];
       if (ev === null || ev === undefined) continue;
-      const px = margin.left + i * xStep;
+      const px = margin + i * xStep;
       const clamped = Math.max(-clamp, Math.min(clamp, ev));
       let py = centerY - (clamped * gh / 2 / clamp);
-      py = Math.max(margin.top, Math.min(margin.top + gh, py));
+      py = Math.max(margin, Math.min(margin + gh, py));
       this._points.push({ x: px, y: py, idx: i });
     }
 
     if (this._points.length < 2) return;
 
-    // Filled areas
-    for (let i = 0; i < this._points.length - 1; i++) {
-      const p1 = this._points[i];
-      const p2 = this._points[i + 1];
+    // White advantage gradient fill (above center)
+    const whiteGrad = ctx.createLinearGradient(0, margin, 0, centerY);
+    whiteGrad.addColorStop(0, 'rgba(255, 255, 255, 0.25)');
+    whiteGrad.addColorStop(1, 'rgba(255, 255, 255, 0.03)');
 
-      if (p1.y <= centerY || p2.y <= centerY) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-        ctx.beginPath();
-        ctx.moveTo(p1.x, Math.min(p1.y, centerY));
-        ctx.lineTo(p2.x, Math.min(p2.y, centerY));
-        ctx.lineTo(p2.x, centerY);
-        ctx.lineTo(p1.x, centerY);
-        ctx.closePath();
-        ctx.fill();
-      }
+    // Black advantage gradient fill (below center)
+    const blackGrad = ctx.createLinearGradient(0, centerY, 0, margin + gh);
+    blackGrad.addColorStop(0, 'rgba(40, 40, 40, 0.03)');
+    blackGrad.addColorStop(1, 'rgba(40, 40, 40, 0.3)');
 
-      if (p1.y >= centerY || p2.y >= centerY) {
-        ctx.fillStyle = 'rgba(50, 50, 50, 0.15)';
-        ctx.beginPath();
-        ctx.moveTo(p1.x, centerY);
-        ctx.lineTo(p2.x, centerY);
-        ctx.lineTo(p2.x, Math.max(p2.y, centerY));
-        ctx.lineTo(p1.x, Math.max(p1.y, centerY));
-        ctx.closePath();
-        ctx.fill();
-      }
+    // Fill white area (segments above center)
+    ctx.beginPath();
+    ctx.moveTo(this._points[0].x, centerY);
+    for (const p of this._points) {
+      ctx.lineTo(p.x, Math.min(p.y, centerY));
     }
+    ctx.lineTo(this._points[this._points.length - 1].x, centerY);
+    ctx.closePath();
+    ctx.fillStyle = whiteGrad;
+    ctx.fill();
 
-    // Line
-    ctx.strokeStyle = '#00c864';
-    ctx.lineWidth = 2;
+    // Fill black area (segments below center)
+    ctx.beginPath();
+    ctx.moveTo(this._points[0].x, centerY);
+    for (const p of this._points) {
+      ctx.lineTo(p.x, Math.max(p.y, centerY));
+    }
+    ctx.lineTo(this._points[this._points.length - 1].x, centerY);
+    ctx.closePath();
+    ctx.fillStyle = blackGrad;
+    ctx.fill();
+
+    // Center line
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 1 * dpr;
+    ctx.beginPath();
+    ctx.moveTo(margin, centerY);
+    ctx.lineTo(margin + gw, centerY);
+    ctx.stroke();
+
+    // Evaluation line
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.lineWidth = 1.5 * dpr;
+    ctx.lineJoin = 'round';
     ctx.beginPath();
     ctx.moveTo(this._points[0].x, this._points[0].y);
     for (let i = 1; i < this._points.length; i++) {
@@ -231,73 +268,83 @@ export class AnalysisGraph {
     }
     ctx.stroke();
 
-    // Dots
+    // Highlighted move: dashed vertical line
+    const highlightPoint = this._points.find(p => p.idx === this._highlightIndex);
+    if (highlightPoint) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.lineWidth = 1 * dpr;
+      ctx.setLineDash([4 * dpr, 4 * dpr]);
+      ctx.beginPath();
+      ctx.moveTo(highlightPoint.x, margin);
+      ctx.lineTo(highlightPoint.x, margin + gh);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Colored dots for classified moves only
     for (const p of this._points) {
+      const cls = this._classifications ? this._classifications[p.idx] : null;
       const isHighlighted = p.idx === this._highlightIndex;
+
       if (isHighlighted) {
         // White ring
         ctx.fillStyle = '#fff';
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, 6 * dpr, 0, Math.PI * 2);
         ctx.fill();
-        // Gold dot
-        ctx.fillStyle = '#ffb020';
+        // Colored dot (use classification color or white)
+        ctx.fillStyle = cls ? cls.color : '#fff';
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, 4 * dpr, 0, Math.PI * 2);
         ctx.fill();
-      } else {
-        ctx.fillStyle = '#00ff82';
+      } else if (cls) {
+        // Only draw dots for classified moves
+        ctx.fillStyle = cls.color;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, 3.5 * dpr, 0, Math.PI * 2);
         ctx.fill();
       }
     }
-
-    // X-axis label
-    ctx.fillStyle = '#999';
-    ctx.font = '12px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText(`Moves (1-${total})`, W / 2, H - 10);
   }
 
   // --- Interaction ---
 
   _getCanvasPoint(e) {
     const rect = this.canvas.getBoundingClientRect();
-    const scaleX = this.canvas.width / rect.width;
-    const scaleY = this.canvas.height / rect.height;
+    const dpr = window.devicePixelRatio || 1;
     return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY,
+      x: (e.clientX - rect.left) * dpr,
+      y: (e.clientY - rect.top) * dpr,
     };
   }
 
-  _findNearestPoint(canvasX, canvasY) {
+  _findNearestPoint(canvasX) {
+    // X-axis snap: find nearest point horizontally
     let best = null;
     let bestDist = Infinity;
     for (const p of this._points) {
-      const dx = p.x - canvasX;
-      const dy = p.y - canvasY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < bestDist) {
-        bestDist = dist;
+      const dx = Math.abs(p.x - canvasX);
+      if (dx < bestDist) {
+        bestDist = dx;
         best = p;
       }
     }
-    return bestDist <= 20 ? best : null;
+    const dpr = window.devicePixelRatio || 1;
+    return bestDist <= 30 * dpr ? best : null;
   }
 
   _handleCanvasClick(e) {
-    const { x, y } = this._getCanvasPoint(e);
-    const point = this._findNearestPoint(x, y);
+    const { x } = this._getCanvasPoint(e);
+    const point = this._findNearestPoint(x);
     if (point && this.onMoveClick) {
       this.onMoveClick(point.idx);
     }
   }
 
   _handleCanvasMouseMove(e) {
-    const { x, y } = this._getCanvasPoint(e);
-    const point = this._findNearestPoint(x, y);
+    const { x } = this._getCanvasPoint(e);
+    const point = this._findNearestPoint(x);
     this.canvas.style.cursor = point ? 'pointer' : 'default';
   }
 }
