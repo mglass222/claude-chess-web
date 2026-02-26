@@ -65,7 +65,7 @@ export const DEFAULTS = {
   theme: 'classic',
   volume: 0.5,
   soundEnabled: true,
-  analysisDepth: 18,
+  analysisDepth: 24,
 };
 
 export const ANIMATION_DURATION = 300; // ms

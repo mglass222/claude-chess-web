@@ -250,28 +250,12 @@
   box-shadow: none;
 }
 
-/* Depth slider */
-.depth-slider-container {
-  width: 100%;
-  padding: 16px 8px 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-
 .depth-label {
   font-size: 10px;
   color: rgba(212, 208, 200, 0.5);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-}
-
-.depth-slider {
-  width: 100%;
-  cursor: pointer;
-  accent-color: var(--accent);
 }
 
 /* Eval Bar (vertical, left of board) */
@@ -568,9 +552,11 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 4px;
+  padding: 12px 0 0;
+  margin-top: 12px;
   border-top: 1px solid var(--glass-border);
   flex-shrink: 0;
+  width: 100%;
 }
 
 .game-info-label {

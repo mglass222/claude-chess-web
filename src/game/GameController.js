@@ -12,7 +12,7 @@ import { GameOverOverlay } from '../ui/GameOverOverlay.js';
 import { SettingsDialog } from '../ui/SettingsDialog.js';
 import { SoundManager } from '../ui/SoundManager.js';
 import { ChessClock } from '../ui/ChessClock.js';
-import { DEFAULTS, DIFFICULTY_LEVELS, TIME_CONTROLS, ANALYSIS_DEPTH_MIN, ANALYSIS_DEPTH_MAX, evalToCp, getDifficultyLabel } from '../config.js';
+import { DEFAULTS, DIFFICULTY_LEVELS, TIME_CONTROLS, evalToCp, getDifficultyLabel } from '../config.js';
 
 export class GameController {
   constructor() {
@@ -106,8 +106,7 @@ export class GameController {
 
     this.moveList = new MoveList(rightPanel);
 
-    // Game info section (FEN + PGN) below move list
-    this._buildGameInfo(rightPanel);
+    // Game info section (FEN + PGN) is built in _buildLeftPanel
 
     this.analysisGraph = new AnalysisGraph(boardArea);
     this.promotionDialog = new PromotionDialog(boardArea);
@@ -187,36 +186,8 @@ export class GameController {
     settingsBtn.addEventListener('click', () => this._openSettings());
     this._leftPanelButtonsContainer.appendChild(settingsBtn);
 
-    // Depth slider
-    const sliderContainer = document.createElement('div');
-    sliderContainer.className = 'depth-slider-container';
-
-    this._depthValueEl = document.createElement('span');
-    this._depthValueEl.className = 'depth-label';
-    this._depthValueEl.textContent = `Depth: ${this.state.analysisDepth}`;
-
-    this._depthSliderEl = document.createElement('input');
-    this._depthSliderEl.type = 'range';
-    this._depthSliderEl.min = ANALYSIS_DEPTH_MIN;
-    this._depthSliderEl.max = ANALYSIS_DEPTH_MAX;
-    this._depthSliderEl.value = this.state.analysisDepth;
-    this._depthSliderEl.className = 'depth-slider';
-    this._depthSliderEl.addEventListener('input', (e) => {
-      const newDepth = parseInt(e.target.value);
-      this.state.analysisDepth = newDepth;
-      this._depthValueEl.textContent = `Depth: ${newDepth}`;
-      // Restart analysis with new depth
-      if (this.state.analyzing && this.state.phase === 'playing') {
-        this.engine.stopAnalysis();
-        this._setTimeout(() => {
-          this.engine.startAnalysis(this.state.fen, newDepth);
-        }, 100);
-      }
-    });
-
-    sliderContainer.appendChild(this._depthValueEl);
-    sliderContainer.appendChild(this._depthSliderEl);
-    this._leftPanelButtonsContainer.appendChild(sliderContainer);
+    // Game info section (FEN + PGN) below settings
+    this._buildGameInfo(this._leftPanelButtonsContainer);
 
     // Analyze Game button (shown only after game over)
     this._analyzeBtnEl = document.createElement('button');
