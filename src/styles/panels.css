@@ -303,9 +303,17 @@
   color: #1a1510;
 }
 
+.eval-bar.flipped .eval-score.white-advantage {
+  color: #d4d0c8;
+}
+
 .eval-score.black-advantage {
   top: 6px;
   color: #d4d0c8;
+}
+
+.eval-bar.flipped .eval-score.black-advantage {
+  color: #1a1510;
 }
 
 .eval-score.calculating {

@@ -214,8 +214,14 @@ export class BoardView {
       const fromRect = this.squares[from].getBoundingClientRect();
       const toRect = this.squares[to].getBoundingClientRect();
 
-      const dx = toRect.left - fromRect.left;
-      const dy = toRect.top - fromRect.top;
+      // getBoundingClientRect returns screen-space coords. When the board is
+      // flipped (rotate 180deg), the piece's local coordinate axes are inverted
+      // relative to the screen, so we negate the delta. We must also preserve
+      // the piece's counter-rotation so it stays upright during animation.
+      const sign = this.flipped ? -1 : 1;
+      const dx = (toRect.left - fromRect.left) * sign;
+      const dy = (toRect.top - fromRect.top) * sign;
+      const rot = this.flipped ? ' rotate(180deg)' : '';
 
       // Remove captured piece if present
       if (this.pieces[to]) {
@@ -223,26 +229,22 @@ export class BoardView {
         delete this.pieces[to];
       }
 
-      // Set initial transform
+      // Start at source position
       pieceEl.style.transition = 'none';
-      pieceEl.style.transform = `translate(${dx}px, ${dy}px)`;
+      pieceEl.style.transform = `translate(0, 0)${rot}`;
       pieceEl.style.zIndex = '10';
-
-      // Move the piece element to the source square first, then animate
-      // Actually, start at source, animate to destination
-      pieceEl.style.transform = 'translate(0, 0)';
 
       // Force reflow
       pieceEl.offsetHeight;
 
-      // Animate
+      // Animate to destination
       pieceEl.style.transition = `transform ${ANIMATION_DURATION}ms ease-out`;
-      pieceEl.style.transform = `translate(${dx}px, ${dy}px)`;
+      pieceEl.style.transform = `translate(${dx}px, ${dy}px)${rot}`;
 
       setTimeout(() => {
-        // Animation done - update DOM
+        // Animation done - restore CSS-driven transform and update DOM
         pieceEl.style.transition = 'none';
-        pieceEl.style.transform = '';
+        pieceEl.style.transform = '';  // reverts to CSS class (rotate(180deg) if flipped)
         pieceEl.style.zIndex = '';
 
         // Move piece from source to target square in DOM

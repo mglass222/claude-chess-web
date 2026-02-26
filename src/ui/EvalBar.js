@@ -14,6 +14,8 @@ export class EvalBar {
     this._rafId = null;
     this._depthMet = false;
     this._maxDepthSeen = 0;
+    this._settleTimer = null;
+    this._pendingEval = null;
 
     this._build();
   }
@@ -69,17 +71,19 @@ export class EvalBar {
 
   update(evaluation) {
     if (!evaluation) {
-      this._showCalculating();
+      this._clearSettle();
+      // Keep the last displayed value — don't clear the label or bar
       this._depthMet = false;
       this._maxDepthSeen = 0;
+      this._pendingEval = null;
       return;
     }
 
     const { cp, mate, depth } = evaluation;
 
     // Filter out shallow, noisy evaluations after a new position
+    // Keep the last displayed value frozen instead of showing "..."
     if (depth !== undefined && depth < EVAL_BAR_MIN_DEPTH && !this._depthMet) {
-      this._showCalculating();
       return;
     }
 
@@ -102,18 +106,31 @@ export class EvalBar {
     // or this is the first update past the threshold
     if (this._depthMet) {
       const delta = Math.abs(newCp - this._targetCp);
-      if (delta < 15) return; // Skip tiny fluctuations between depths
+      if (delta < 30) return; // Skip fluctuations between depth iterations
     }
+
+    // Debounce: wait 400ms for the eval to settle before applying
+    this._pendingEval = { cp: newCp, mate, isMate: mate !== null && mate !== undefined };
+    this._clearSettle();
+    this._settleTimer = setTimeout(() => this._applyPending(), 400);
+  }
+
+  _applyPending() {
+    if (!this._pendingEval) return;
+    const { cp, isMate, mate } = this._pendingEval;
+    this._pendingEval = null;
     this._depthMet = true;
 
-    if (mate !== null && mate !== undefined) {
-      this._isMate = true;
-      this._mateIn = mate;
-    } else {
-      this._isMate = false;
-      this._mateIn = null;
+    this._isMate = isMate;
+    this._mateIn = isMate ? mate : null;
+    this._setTarget(cp);
+  }
+
+  _clearSettle() {
+    if (this._settleTimer) {
+      clearTimeout(this._settleTimer);
+      this._settleTimer = null;
     }
-    this._setTarget(newCp);
   }
 
   _setTarget(cp) {
@@ -190,17 +207,14 @@ export class EvalBar {
       cancelAnimationFrame(this._rafId);
       this._rafId = null;
     }
-    this._currentCp = 0;
-    this._targetCp = 0;
-    this._startCp = 0;
-    this._isMate = false;
-    this._mateIn = null;
+    this._clearSettle();
+    this._pendingEval = null;
+    // Freeze current bar position and label — don't reset to 0
+    this._startCp = this._currentCp;
+    this._targetCp = this._currentCp;
     this._animating = false;
     this._depthMet = false;
     this._maxDepthSeen = 0;
-    this._updateBar(0);
-    this.scoreLabel.textContent = '0.0';
-    this.scoreLabel.className = 'eval-score white-advantage';
   }
 
   destroy() {
@@ -208,6 +222,7 @@ export class EvalBar {
       cancelAnimationFrame(this._rafId);
       this._rafId = null;
     }
+    this._clearSettle();
     this._animating = false;
   }
 }
