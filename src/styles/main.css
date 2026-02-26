@@ -85,6 +85,11 @@ body::after {
   height: 100vh;
   max-height: 100vh;
   width: 100%;
+  transition: grid-template-columns 0.3s ease;
+}
+
+#game-layout.analysis-mode {
+  grid-template-columns: 220px auto 360px;
 }
 
 #left-panel {

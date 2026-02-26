@@ -104,6 +104,7 @@ export class AnalysisGraph {
     this.visible = true;
     this.progressOverlay.style.display = 'none';
     this.graphPanel.style.display = 'flex';
+    this._setAnalysisMode(true);
     this._sizeCanvas();
     this._draw();
   }
@@ -120,42 +121,106 @@ export class AnalysisGraph {
     this.visible = false;
     this.progressOverlay.style.display = 'none';
     this.graphPanel.style.display = 'none';
+    this._setAnalysisMode(false);
+  }
+
+  _setAnalysisMode(on) {
+    const layout = document.getElementById('game-layout');
+    if (layout) layout.classList.toggle('analysis-mode', on);
   }
 
   // --- Move Classification ---
+  // Uses chess.com-style expected win% model.
+  // Win% = 50 + 50 * (2 / (1 + e^(-0.00368208 * cp)) - 1)  (Lichess sigmoid)
+
+  _cpToWinPct(cp) {
+    return 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * cp)) - 1);
+  }
 
   _classifyMoves(evaluations) {
+    // Chess.com move classification using expected win% model.
+    // Expected points lost (eploss) thresholds (0–1 scale):
+    //   Best:       0.00        Excellent: 0.00–0.02    Good: 0.02–0.05
+    //   Inaccuracy: 0.05–0.10   Mistake:  0.10–0.20    Blunder: 0.20+
+    // Special: Brilliant (sacrifice + best), Great (swing game), Miss (missed opportunity)
+
     const classifications = new Array(evaluations.length).fill(null);
-    // First position (index 0) is the starting position, no classification
     for (let i = 1; i < evaluations.length; i++) {
       const prev = evaluations[i - 1];
       const curr = evaluations[i];
       if (prev === null || prev === undefined || curr === null || curr === undefined) continue;
 
-      // Determine which side moved: odd index = white just moved, even = black just moved
       const whiteJustMoved = (i % 2 === 1);
 
-      // Centipawn loss from the moving side's perspective
-      // Positive eval = good for white. If white moved, loss = prev - curr. If black moved, loss = curr - prev.
-      const cpLoss = whiteJustMoved ? (prev - curr) : (curr - prev);
+      // Win% from the moving side's perspective before and after
+      const winBefore = whiteJustMoved ? this._cpToWinPct(prev) : this._cpToWinPct(-prev);
+      const winAfter = whiteJustMoved ? this._cpToWinPct(curr) : this._cpToWinPct(-curr);
+      const eploss = (winBefore - winAfter) / 100;
 
-      // Position eval from the moving side's perspective before the move
+      // Position eval from moving side's perspective (cp)
       const posBefore = whiteJustMoved ? prev : -prev;
+      const posAfter = whiteJustMoved ? curr : -curr;
 
-      if (cpLoss >= 200) {
+      // Opponent's previous eval from their perspective (for miss detection)
+      const oppPrevEval = i >= 2 ? evaluations[i - 2] : null;
+
+      // --- Bad moves ---
+      if (eploss >= 0.20) {
         classifications[i] = { type: 'blunder', color: '#ca3431' };
-      } else if (cpLoss >= 50) {
-        classifications[i] = { type: 'mistake', color: '#e6a817' };
-      } else if (cpLoss < 10) {
-        if (posBefore < -300) {
-          classifications[i] = { type: 'brilliant', color: '#1bada6' };
-        } else if (posBefore < -100) {
-          classifications[i] = { type: 'great', color: '#3c6eb4' };
+      } else if (eploss >= 0.10) {
+        // Miss: opponent blundered on previous move but we failed to capitalize
+        // Detected when: opponent's move (i-1) lost significant win%, and now
+        // our move also loses win% instead of punishing them
+        let isMiss = false;
+        if (oppPrevEval !== null && oppPrevEval !== undefined && i >= 2) {
+          const oppWhiteMoved = ((i - 1) % 2 === 1);
+          const oppWinBefore = oppWhiteMoved ? this._cpToWinPct(oppPrevEval) : this._cpToWinPct(-oppPrevEval);
+          const oppWinAfter = oppWhiteMoved ? this._cpToWinPct(prev) : this._cpToWinPct(-prev);
+          const oppEploss = (oppWinBefore - oppWinAfter) / 100;
+          // Opponent lost 10%+ win chance (made a mistake/blunder) and we had
+          // a strong position but failed to maintain advantage
+          if (oppEploss >= 0.10 && posBefore > 100) {
+            isMiss = true;
+          }
+        }
+        if (isMiss) {
+          classifications[i] = { type: 'miss', color: '#e6912a' };
         } else {
-          classifications[i] = { type: 'excellent', color: '#5dab47' };
+          classifications[i] = { type: 'mistake', color: '#e6912a' };
+        }
+      } else if (eploss >= 0.05) {
+        classifications[i] = { type: 'inaccuracy', color: '#e6c831' };
+      } else if (eploss >= 0.02) {
+        classifications[i] = { type: 'good', color: '#97af8b' };
+      } else {
+        // --- Strong moves (eploss < 0.02) ---
+
+        // Brilliant: best/near-best move involving a material sacrifice
+        // in a competitive (non-winning) position
+        const cpLoss = whiteJustMoved ? (prev - curr) : (curr - prev);
+        const isSacrifice = cpLoss < -100;
+        const notAlreadyWinning = posBefore < 300;
+        if (isSacrifice && notAlreadyWinning) {
+          classifications[i] = { type: 'brilliant', color: '#1bada6' };
+          continue;
+        }
+
+        // Great: turned a losing position into equal/winning
+        const wasLosing = posBefore < -150;
+        const nowOk = posAfter >= -50;
+        if (wasLosing && nowOk) {
+          classifications[i] = { type: 'great', color: '#5c8bb0' };
+          continue;
+        }
+
+        // Best: eploss essentially 0
+        if (eploss <= 0.001) {
+          classifications[i] = { type: 'best', color: '#96bc4b' };
+        } else {
+          // Excellent: eploss between 0 and 0.02
+          classifications[i] = { type: 'excellent', color: '#96bc4b' };
         }
       }
-      // 10-50 cp loss = normal, no dot (null)
     }
     return classifications;
   }
@@ -177,11 +242,12 @@ export class AnalysisGraph {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, W, H);
 
-    // Background
-    ctx.fillStyle = '#1a1a2e';
+    // Dark gray background (black's territory)
+    ctx.fillStyle = '#3a3a3a';
     ctx.fillRect(0, 0, W, H);
 
     const centerY = margin + gh / 2;
+    const bottom = margin + gh;
     const clamp = 1000; // +/- 10 pawns
 
     // Build points
@@ -195,81 +261,51 @@ export class AnalysisGraph {
       const px = margin + i * xStep;
       const clamped = Math.max(-clamp, Math.min(clamp, ev));
       let py = centerY - (clamped * gh / 2 / clamp);
-      py = Math.max(margin, Math.min(margin + gh, py));
+      py = Math.max(margin, Math.min(bottom, py));
       this._points.push({ x: px, y: py, idx: i });
     }
 
     if (this._points.length < 2) return;
 
-    // White advantage gradient fill (above center)
-    const whiteGrad = ctx.createLinearGradient(0, margin, 0, centerY);
-    whiteGrad.addColorStop(0, 'rgba(255, 255, 255, 0.25)');
-    whiteGrad.addColorStop(1, 'rgba(255, 255, 255, 0.03)');
-
-    // Black advantage gradient fill (below center)
-    const blackGrad = ctx.createLinearGradient(0, centerY, 0, margin + gh);
-    blackGrad.addColorStop(0, 'rgba(40, 40, 40, 0.03)');
-    blackGrad.addColorStop(1, 'rgba(40, 40, 40, 0.3)');
-
-    // Fill white area (segments above center)
+    // Solid white fill from bottom up to the eval line
     ctx.beginPath();
-    ctx.moveTo(this._points[0].x, centerY);
+    ctx.moveTo(this._points[0].x, bottom);
     for (const p of this._points) {
-      ctx.lineTo(p.x, Math.min(p.y, centerY));
+      ctx.lineTo(p.x, p.y);
     }
-    ctx.lineTo(this._points[this._points.length - 1].x, centerY);
+    ctx.lineTo(this._points[this._points.length - 1].x, bottom);
     ctx.closePath();
-    ctx.fillStyle = whiteGrad;
+    ctx.fillStyle = '#e8e4dc';
     ctx.fill();
 
-    // Fill black area (segments below center)
-    ctx.beginPath();
-    ctx.moveTo(this._points[0].x, centerY);
-    for (const p of this._points) {
-      ctx.lineTo(p.x, Math.max(p.y, centerY));
-    }
-    ctx.lineTo(this._points[this._points.length - 1].x, centerY);
-    ctx.closePath();
-    ctx.fillStyle = blackGrad;
-    ctx.fill();
-
-    // Center line
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    // Subtle center line
+    ctx.strokeStyle = 'rgba(150, 150, 150, 0.4)';
     ctx.lineWidth = 1 * dpr;
     ctx.beginPath();
     ctx.moveTo(margin, centerY);
     ctx.lineTo(margin + gw, centerY);
     ctx.stroke();
 
-    // Evaluation line
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-    ctx.lineWidth = 1.5 * dpr;
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(this._points[0].x, this._points[0].y);
-    for (let i = 1; i < this._points.length; i++) {
-      ctx.lineTo(this._points[i].x, this._points[i].y);
-    }
-    ctx.stroke();
-
     // Highlighted move: dashed vertical line
     const highlightPoint = this._points.find(p => p.idx === this._highlightIndex);
     if (highlightPoint) {
       ctx.save();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
       ctx.lineWidth = 1 * dpr;
       ctx.setLineDash([4 * dpr, 4 * dpr]);
       ctx.beginPath();
       ctx.moveTo(highlightPoint.x, margin);
-      ctx.lineTo(highlightPoint.x, margin + gh);
+      ctx.lineTo(highlightPoint.x, bottom);
       ctx.stroke();
       ctx.restore();
     }
 
-    // Colored dots for classified moves only
+    // Dots only for notable classifications (chess.com style)
+    const dotTypes = new Set(['blunder', 'mistake', 'miss', 'inaccuracy', 'brilliant', 'great']);
     for (const p of this._points) {
       const cls = this._classifications ? this._classifications[p.idx] : null;
       const isHighlighted = p.idx === this._highlightIndex;
+      const showDot = cls && dotTypes.has(cls.type);
 
       if (isHighlighted) {
         // White ring
@@ -277,13 +313,13 @@ export class AnalysisGraph {
         ctx.beginPath();
         ctx.arc(p.x, p.y, 6 * dpr, 0, Math.PI * 2);
         ctx.fill();
-        // Colored dot (use classification color or white)
-        ctx.fillStyle = cls ? cls.color : '#fff';
+        // Colored dot (use classification color or dark gray)
+        ctx.fillStyle = showDot ? cls.color : '#555';
         ctx.beginPath();
         ctx.arc(p.x, p.y, 4 * dpr, 0, Math.PI * 2);
         ctx.fill();
-      } else if (cls) {
-        // Only draw dots for classified moves
+      } else if (showDot) {
+        // Only draw dots for notable moves
         ctx.fillStyle = cls.color;
         ctx.beginPath();
         ctx.arc(p.x, p.y, 3.5 * dpr, 0, Math.PI * 2);

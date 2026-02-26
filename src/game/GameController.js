@@ -1203,6 +1203,7 @@ export class GameController {
     } else if (direction === 'forward' && this.history.isAtCurrentPosition()) {
       // Returned to current position
       this.boardView.updatePosition(this.state.board);
+      this._updateCheckHighlight();
     }
 
     this.moveList.render(this.history);
@@ -1220,6 +1221,7 @@ export class GameController {
       this._showPositionFromFen(fen);
     } else if (this.history.isAtCurrentPosition()) {
       this.boardView.updatePosition(this.state.board);
+      this._updateCheckHighlight();
     }
     this.moveList.render(this.history);
     this._updateGameInfo();
@@ -1232,6 +1234,22 @@ export class GameController {
   _showPositionFromFen(fen) {
     const temp = new Chess(fen);
     this.boardView.updatePosition(temp.board());
+    // Show check highlight only if this position is in check
+    if (temp.isCheck()) {
+      const board = temp.board();
+      const turn = temp.turn();
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const p = board[r][c];
+          if (p && p.type === 'k' && p.color === turn) {
+            this.boardView.setCheck(String.fromCharCode(97 + c) + (8 - r));
+            return;
+          }
+        }
+      }
+    } else {
+      this.boardView.setCheck(null);
+    }
   }
 
   _updateEvalBarFromAnalysis(moveIndex) {
@@ -1277,6 +1295,7 @@ export class GameController {
         e.preventDefault();
         this.history.goToEnd();
         this.boardView.updatePosition(this.state.board);
+        this._updateCheckHighlight();
         this.moveList.render(this.history);
         this._updateGameInfo();
         {
