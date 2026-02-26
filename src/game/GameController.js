@@ -188,15 +188,7 @@ export class GameController {
       }
     }
 
-    // Settings button (below resign)
-    const settingsBtn = document.createElement('button');
-    settingsBtn.className = 'panel-btn panel-btn-secondary';
-    settingsBtn.id = 'btn-settings';
-    settingsBtn.textContent = 'Settings';
-    settingsBtn.addEventListener('click', () => this._openSettings());
-    this._leftPanelButtonsContainer.appendChild(settingsBtn);
-
-    // PGN button below settings
+    // PGN button
     this._pgnCopyBtn = document.createElement('button');
     this._pgnCopyBtn.className = 'panel-btn pgn-btn';
     this._pgnCopyBtn.textContent = 'Copy PGN';
@@ -209,6 +201,14 @@ export class GameController {
     this._fenCopyBtn.textContent = 'Copy FEN';
     this._fenCopyBtn.addEventListener('click', () => this._copyToClipboard(this._getCurrentFen(), this._fenCopyBtn));
     this._leftPanelButtonsContainer.appendChild(this._fenCopyBtn);
+
+    // Settings button (below Copy FEN)
+    const settingsBtn = document.createElement('button');
+    settingsBtn.className = 'panel-btn panel-btn-secondary settings-btn';
+    settingsBtn.id = 'btn-settings';
+    settingsBtn.textContent = 'Settings';
+    settingsBtn.addEventListener('click', () => this._openSettings());
+    this._leftPanelButtonsContainer.appendChild(settingsBtn);
 
     // Analyze Game button (shown only after game over)
     this._analyzeBtnEl = document.createElement('button');
@@ -660,8 +660,10 @@ export class GameController {
     this.setupScreen.hide();
     this.gameOverOverlay.hide();
     this._analyzeBtnEl.style.display = 'none';
+    this._analyzeBtnEl.classList.remove('best-move-btn');
     this._inlineTimePicker.style.display = 'none';
     this.analysisGraph.hide();
+    this.state.showingBestMove = false;
     this.state.resetGame();
     this.state.startGame();
     this.history.clear();
@@ -724,8 +726,10 @@ export class GameController {
     this.chessClock.stop();
     this.gameOverOverlay.hide();
     this._analyzeBtnEl.style.display = 'none';
+    this._analyzeBtnEl.classList.remove('best-move-btn');
     this._inlineTimePicker.style.display = 'none';
     this.analysisGraph.hide();
+    this.state.showingBestMove = false;
     this.state.resetGame();
     this.state.playerColor = this.state.lastPlayerColor;
     this.state.difficulty = this.state.lastDifficulty;
@@ -974,14 +978,21 @@ export class GameController {
 
     // Show analyze button in left panel
     this._analyzeBtnEl.style.display = 'block';
-    this._analyzeBtnEl.textContent = this.state.analysisResults ? 'View Analysis' : 'Analyze Game';
+    this.state.showingBestMove = false;
+    if (this.state.analysisResults) {
+      this._analyzeBtnEl.textContent = 'Best Move';
+      this._analyzeBtnEl.classList.add('best-move-btn');
+    } else {
+      this._analyzeBtnEl.textContent = 'Analyze Game';
+      this._analyzeBtnEl.classList.remove('best-move-btn');
+    }
     this._inlineTimePicker.style.display = 'none';
   }
 
   _handleAnalyzeClick() {
     if (this.state.analysisResults) {
-      this.analysisGraph.showGraph(this.state.analysisResults.evaluations);
-      this.analysisGraph.setHighlight(this.history.getCurrentViewIndex());
+      this._toggleBestMoveArrow();
+      return;
     } else {
       // Toggle time picker visibility
       const isVisible = this._inlineTimePicker.style.display !== 'none';
@@ -1057,13 +1068,17 @@ export class GameController {
       return cpVal;
     });
 
+    // Extract best moves per position
+    const bestMoves = results.map(r => r?.bestMove || null);
+
     // Store results and show graph
-    this.state.analysisResults = { evaluations, movetime };
+    this.state.analysisResults = { evaluations, bestMoves, movetime };
     this.analysisGraph.showGraph(evaluations);
     this.analysisGraph.setHighlight(this.history.getCurrentViewIndex());
 
-    // Update the analyze button to "View Analysis" now that results are cached
-    this._analyzeBtnEl.textContent = 'View Analysis';
+    // Update the analyze button to show best move now that results are cached
+    this._analyzeBtnEl.textContent = 'Best Move';
+    this._analyzeBtnEl.classList.add('best-move-btn');
   }
 
   _takeBack() {
@@ -1173,6 +1188,30 @@ export class GameController {
     this.boardView.showHintArrow(from, to);
   }
 
+  _toggleBestMoveArrow() {
+    this.state.showingBestMove = !this.state.showingBestMove;
+    if (this.state.showingBestMove) {
+      this._analyzeBtnEl.textContent = 'Hide Best Move';
+      this._showBestMoveForCurrentPosition();
+    } else {
+      this._analyzeBtnEl.textContent = 'Best Move';
+      this.boardView.clearHintArrow();
+    }
+  }
+
+  _showBestMoveForCurrentPosition() {
+    if (!this.state.analysisResults?.bestMoves) return;
+    const viewIdx = this.history.getCurrentViewIndex();
+    const bestMove = this.state.analysisResults.bestMoves[viewIdx];
+    if (bestMove && bestMove.length >= 4) {
+      const from = bestMove.substring(0, 2);
+      const to = bestMove.substring(2, 4);
+      this.boardView.showHintArrow(from, to);
+    } else {
+      this.boardView.clearHintArrow();
+    }
+  }
+
   // --- Navigation ---
 
   _navigateHistory(direction) {
@@ -1198,6 +1237,7 @@ export class GameController {
       this.analysisGraph.setHighlight(viewIdx);
     }
     this._updateEvalBarFromAnalysis(viewIdx);
+    if (this.state.showingBestMove) this._showBestMoveForCurrentPosition();
   }
 
   _goToMoveIndex(idx) {
@@ -1214,6 +1254,7 @@ export class GameController {
       this.analysisGraph.setHighlight(idx);
     }
     this._updateEvalBarFromAnalysis(idx);
+    if (this.state.showingBestMove) this._showBestMoveForCurrentPosition();
   }
 
   _showPositionFromFen(fen) {
@@ -1273,6 +1314,7 @@ export class GameController {
             this.analysisGraph.setHighlight(startIdx);
           }
           this._updateEvalBarFromAnalysis(startIdx);
+          if (this.state.showingBestMove) this._showBestMoveForCurrentPosition();
         }
         break;
       case 'ArrowDown':
@@ -1289,6 +1331,7 @@ export class GameController {
             this.analysisGraph.setHighlight(endIdx);
           }
           this._updateEvalBarFromAnalysis(endIdx);
+          if (this.state.showingBestMove) this._showBestMoveForCurrentPosition();
         }
         break;
     }
