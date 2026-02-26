@@ -131,13 +131,14 @@ export class EngineManager {
     return (info.depth !== undefined) ? info : null;
   }
 
-  setDifficulty(difficulty) {
+  setDifficulty(difficulty, moveTimeSec = null) {
     if (!this.ready) return;
-    const { skillLevel } = getDifficultyConfig(difficulty);
+    // When using movetime mode, set full strength (skill 20)
+    const skillLevel = moveTimeSec != null ? 20 : getDifficultyConfig(difficulty).skillLevel;
     this.worker.postMessage(`setoption name Skill Level value ${skillLevel}`);
   }
 
-  getMove(fen, difficulty) {
+  getMove(fen, difficulty, moveTimeSec = null) {
     return new Promise((resolve) => {
       if (!this.ready) {
         resolve(null);
@@ -147,16 +148,15 @@ export class EngineManager {
       // Stop any ongoing analysis
       this.stopAnalysis();
 
-      const { depth } = getDifficultyConfig(difficulty);
-
       // Timeout safety: resolve with null if engine doesn't respond
+      const timeout = moveTimeSec ? (moveTimeSec * 1000 + ENGINE_MOVE_TIMEOUT) : ENGINE_MOVE_TIMEOUT;
       this._moveTimeoutId = setTimeout(() => {
         this._moveTimeoutId = null;
         console.warn('Engine move timed out');
         this.onBestMove = null;
         this.worker.postMessage('stop');
         resolve(null);
-      }, ENGINE_MOVE_TIMEOUT);
+      }, timeout);
 
       // Wait for readyok to ensure the "stop" bestmove has been flushed,
       // then set the callback and start the search
@@ -169,7 +169,15 @@ export class EngineManager {
           resolve(moveUci);
         };
         this.worker.postMessage(`position fen ${fen}`);
-        this.worker.postMessage(`go depth ${depth}`);
+        if (moveTimeSec != null && moveTimeSec > 0) {
+          this.worker.postMessage(`go movetime ${moveTimeSec * 1000}`);
+        } else if (moveTimeSec === 0) {
+          // "Instant" movetime mode: full strength, depth 15
+          this.worker.postMessage('go depth 15');
+        } else {
+          const { depth } = getDifficultyConfig(difficulty);
+          this.worker.postMessage(`go depth ${depth}`);
+        }
       };
       this.worker.postMessage('isready');
     });

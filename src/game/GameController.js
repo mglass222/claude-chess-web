@@ -12,7 +12,7 @@ import { GameOverOverlay } from '../ui/GameOverOverlay.js';
 import { SettingsDialog } from '../ui/SettingsDialog.js';
 import { SoundManager } from '../ui/SoundManager.js';
 import { ChessClock } from '../ui/ChessClock.js';
-import { DEFAULTS, DIFFICULTY_LEVELS, TIME_CONTROLS, evalToCp, getDifficultyLabel } from '../config.js';
+import { DEFAULTS, DIFFICULTY_LEVELS, MOVE_TIME_OPTIONS, TIME_CONTROLS, evalToCp, getDifficultyLabel } from '../config.js';
 
 export class GameController {
   constructor() {
@@ -133,6 +133,7 @@ export class GameController {
     // Auto-start game with saved/default settings
     this.state.playerColor = this.settings.playerColor;
     this.state.difficulty = this.settings.difficulty;
+    this.state.moveTime = this.settings.moveTime ?? null;
     this._startGame();
   }
 
@@ -285,7 +286,39 @@ export class GameController {
     }
     this._ngDiffSelect.addEventListener('change', () => {
       this._ngSelectedDifficulty = parseInt(this._ngDiffSelect.value);
+      this._ngSelectEngineMode('difficulty');
     });
+
+    // --- Engine Think Time section (alternative to difficulty) ---
+    const ngMoveTimeLabel = document.createElement('div');
+    ngMoveTimeLabel.className = 'setup-section-label';
+    ngMoveTimeLabel.textContent = 'Or: Think Time Per Move';
+
+    const ngMoveTimeGrid = document.createElement('div');
+    ngMoveTimeGrid.className = 'setup-time-grid';
+
+    this._ngSelectedMoveTime = this.settings.moveTime ?? null;
+    this._ngMoveTimeBtns = [];
+    for (const mt of MOVE_TIME_OPTIONS) {
+      const btn = document.createElement('button');
+      btn.className = 'setup-time-btn' + (this._ngSelectedMoveTime === mt.seconds ? ' selected' : '');
+      btn.dataset.seconds = mt.seconds;
+      btn.textContent = mt.label;
+      btn.addEventListener('click', () => {
+        this._ngSelectedMoveTime = mt.seconds;
+        for (const b of this._ngMoveTimeBtns) b.classList.toggle('selected', parseInt(b.dataset.seconds) === mt.seconds);
+        this._ngSelectEngineMode('movetime');
+      });
+      ngMoveTimeGrid.appendChild(btn);
+      this._ngMoveTimeBtns.push(btn);
+    }
+
+    // Apply initial visual state
+    this._ngEngineMode = this.settings.moveTime != null ? 'movetime' : 'difficulty';
+    this._ngDiffSelect.style.opacity = this._ngEngineMode === 'difficulty' ? '1' : '0.4';
+    for (const b of this._ngMoveTimeBtns) {
+      if (this._ngEngineMode !== 'movetime') b.classList.remove('selected');
+    }
 
     // --- Time Control section ---
     const ngTimeLabel = document.createElement('div');
@@ -333,9 +366,11 @@ export class GameController {
       this.state.playerColor = this._ngSelectedColor;
       this.state.difficulty = this._ngSelectedDifficulty;
       this.state.timeControl = this._ngSelectedTime;
+      this.state.moveTime = this._ngEngineMode === 'movetime' ? this._ngSelectedMoveTime : null;
       this.settings.playerColor = this._ngSelectedColor;
       this.settings.difficulty = this._ngSelectedDifficulty;
       this.settings.timeControl = this._ngSelectedTime;
+      this.settings.moveTime = this.state.moveTime;
       this._saveSettings();
       this._hideNewGameSetup();
       this._startGame();
@@ -361,6 +396,8 @@ export class GameController {
     this._newGameSetup.appendChild(divider());
     this._newGameSetup.appendChild(ngDiffLabel);
     this._newGameSetup.appendChild(this._ngDiffSelect);
+    this._newGameSetup.appendChild(ngMoveTimeLabel);
+    this._newGameSetup.appendChild(ngMoveTimeGrid);
     this._newGameSetup.appendChild(divider());
     this._newGameSetup.appendChild(ngTimeLabel);
     this._newGameSetup.appendChild(ngTimeGrid);
@@ -378,14 +415,33 @@ export class GameController {
     this._ngBlackBtn.classList.toggle('selected', color === 'b');
   }
 
+  _ngSelectEngineMode(mode) {
+    this._ngEngineMode = mode;
+    if (mode === 'difficulty') {
+      this._ngSelectedMoveTime = null;
+      this._ngDiffSelect.style.opacity = '1';
+      for (const b of this._ngMoveTimeBtns) b.classList.remove('selected');
+    } else {
+      this._ngDiffSelect.style.opacity = '0.4';
+    }
+  }
+
   _showNewGameSetup() {
     // Sync current settings
     this._ngSelectedColor = this.settings.playerColor;
     this._ngSelectedDifficulty = this.settings.difficulty;
     this._ngSelectedTime = this.settings.timeControl || 0;
+    this._ngSelectedMoveTime = this.settings.moveTime ?? null;
     this._ngSelectColor(this._ngSelectedColor);
     this._ngDiffSelect.value = this._ngSelectedDifficulty;
     for (const b of this._ngTimeBtns) b.classList.toggle('selected', parseInt(b.dataset.minutes) === this._ngSelectedTime);
+
+    // Sync engine mode
+    this._ngEngineMode = this._ngSelectedMoveTime != null ? 'movetime' : 'difficulty';
+    this._ngDiffSelect.style.opacity = this._ngEngineMode === 'difficulty' ? '1' : '0.4';
+    for (const b of this._ngMoveTimeBtns) {
+      b.classList.toggle('selected', this._ngEngineMode === 'movetime' && parseInt(b.dataset.seconds) === this._ngSelectedMoveTime);
+    }
 
     // Hide normal buttons, show setup
     this._leftPanelButtonsContainer.style.display = 'none';
@@ -472,8 +528,15 @@ export class GameController {
     const date = new Date();
     const dateStr = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
     const isWhite = this.state.lastPlayerColor === 'w';
-    const white = isWhite ? 'You' : `Stockfish (${getDifficultyLabel(this.state.lastDifficulty)})`;
-    const black = isWhite ? `Stockfish (${getDifficultyLabel(this.state.lastDifficulty)})` : 'You';
+    let engineLabel;
+    if (this.state.moveTime != null) {
+      const mtOpt = MOVE_TIME_OPTIONS.find(o => o.seconds === this.state.moveTime);
+      engineLabel = `Stockfish (${mtOpt ? mtOpt.label : this.state.moveTime + 's'}/move)`;
+    } else {
+      engineLabel = `Stockfish (${getDifficultyLabel(this.state.lastDifficulty)})`;
+    }
+    const white = isWhite ? 'You' : engineLabel;
+    const black = isWhite ? engineLabel : 'You';
 
     let result = '*';
     if (this.state.phase === 'over') {
@@ -618,7 +681,7 @@ export class GameController {
     this.moveList.clear();
 
     // Set engine difficulty
-    this.engine.setDifficulty(this.state.difficulty);
+    this.engine.setDifficulty(this.state.difficulty, this.state.moveTime);
 
     // Update player info
     this._updatePlayerInfos();
@@ -675,7 +738,7 @@ export class GameController {
     this._replayEl.style.display = 'none';
     this._updateGameInfo();
 
-    this.engine.setDifficulty(this.state.difficulty);
+    this.engine.setDifficulty(this.state.difficulty, this.state.moveTime);
     this._startAnalysis();
 
     if (this.state.playerColor === 'b') {
@@ -831,7 +894,8 @@ export class GameController {
     // Stop analysis while getting AI move
     this.engine.stopAnalysis();
 
-    const moveUci = await this.engine.getMove(this.state.fen, this.state.difficulty);
+    const moveTimeSec = this.state.moveTime != null ? this.state.moveTime : null;
+    const moveUci = await this.engine.getMove(this.state.fen, this.state.difficulty, moveTimeSec);
     if (!moveUci || moveUci === '(none)') {
       console.warn('Engine failed to produce a move, retrying...');
       this._setTimeout(() => this._makeAIMove(), 500);
@@ -1220,7 +1284,13 @@ export class GameController {
     const opponentName = this._opponentInfo.querySelector('.player-name');
     opponentAvatar.textContent = isWhite ? 'B' : 'W';
     opponentAvatar.className = `player-avatar ${isWhite ? 'black-piece' : 'white-piece'}`;
-    opponentName.textContent = `Stockfish (${getDifficultyLabel(difficulty)})`;
+    if (this.state.moveTime != null) {
+      const mtOpt = MOVE_TIME_OPTIONS.find(o => o.seconds === this.state.moveTime);
+      const mtLabel = mtOpt ? mtOpt.label : `${this.state.moveTime}s`;
+      opponentName.textContent = `Stockfish (${mtLabel}/move)`;
+    } else {
+      opponentName.textContent = `Stockfish (${getDifficultyLabel(difficulty)})`;
+    }
 
     this._playerInfo.style.display = 'flex';
     this._opponentInfo.style.display = 'flex';
@@ -1325,7 +1395,7 @@ export class GameController {
       if (this.state.phase === 'over') {
         this._handleGameOver();
       }
-      this.engine.setDifficulty(this.state.difficulty);
+      this.engine.setDifficulty(this.state.difficulty, this.state.moveTime);
 
       if (this.state.phase === 'playing') {
         this._startAnalysis();
@@ -1364,6 +1434,7 @@ export class GameController {
       playerColor: this.settings.playerColor,
       difficulty: this.settings.difficulty,
       timeControl: this.settings.timeControl || 0,
+      moveTime: this.settings.moveTime ?? null,
     }));
   }
 }

@@ -46,17 +46,18 @@ export class BoardView {
     this.svgOverlay.classList.add('board-svg-overlay');
     this.svgOverlay.setAttribute('viewBox', '0 0 800 800');
 
-    // Arrow marker definition
+    // Arrow marker definition (userSpaceOnUse for predictable sizing)
     const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
     const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
     marker.setAttribute('id', 'arrowhead');
-    marker.setAttribute('markerWidth', '10');
-    marker.setAttribute('markerHeight', '7');
-    marker.setAttribute('refX', '10');
-    marker.setAttribute('refY', '3.5');
+    marker.setAttribute('markerWidth', '28');
+    marker.setAttribute('markerHeight', '24');
+    marker.setAttribute('refX', '0');
+    marker.setAttribute('refY', '12');
     marker.setAttribute('orient', 'auto');
+    marker.setAttribute('markerUnits', 'userSpaceOnUse');
     const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-    polygon.setAttribute('points', '0 0, 10 3.5, 0 7');
+    polygon.setAttribute('points', '0 0, 28 12, 0 24');
     polygon.setAttribute('fill', 'rgba(0, 220, 0, 0.85)');
     marker.appendChild(polygon);
     defs.appendChild(marker);
@@ -323,15 +324,22 @@ export class BoardView {
     this.squares[from]?.classList.add('hint-from');
     this.squares[to]?.classList.add('hint-to');
 
-    // Draw SVG arrow
+    // Draw SVG arrow — shorten line so it ends at the arrowhead base
     const fromCoords = this._squareToSvgCoords(from);
     const toCoords = this._squareToSvgCoords(to);
+
+    const dx = toCoords.x - fromCoords.x;
+    const dy = toCoords.y - fromCoords.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const arrowLen = 28; // matches marker width
+    const shortenedX = toCoords.x - (dx / len) * arrowLen;
+    const shortenedY = toCoords.y - (dy / len) * arrowLen;
 
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('x1', fromCoords.x);
     line.setAttribute('y1', fromCoords.y);
-    line.setAttribute('x2', toCoords.x);
-    line.setAttribute('y2', toCoords.y);
+    line.setAttribute('x2', shortenedX);
+    line.setAttribute('y2', shortenedY);
     line.setAttribute('stroke', 'rgba(0, 220, 0, 0.85)');
     line.setAttribute('stroke-width', '8');
     line.setAttribute('marker-end', 'url(#arrowhead)');

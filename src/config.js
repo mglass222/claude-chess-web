@@ -34,6 +34,15 @@ export const DIFFICULTY_LEVELS = [
 
 export const DIFFICULTY_OPTIONS = DIFFICULTY_LEVELS.map(d => d.id);
 
+// Seconds-per-move options (0 = instant / no movetime limit, uses depth 15)
+export const MOVE_TIME_OPTIONS = [
+  { label: 'Instant', seconds: 0 },
+  { label: '1s',      seconds: 1 },
+  { label: '3s',      seconds: 3 },
+  { label: '5s',      seconds: 5 },
+  { label: '10s',     seconds: 10 },
+];
+
 // Map difficulty id to Stockfish Skill Level and depth limit
 export function getDifficultyConfig(difficulty) {
   const level = DIFFICULTY_LEVELS.find(d => d.id === difficulty);
