@@ -2,6 +2,7 @@ import { Chess } from 'chess.js';
 import { GameState } from './GameState.js';
 import { MoveHistory } from './MoveHistory.js';
 import { EngineManager } from '../engine/EngineManager.js';
+import { AnalysisPool } from '../engine/AnalysisPool.js';
 import { BoardView } from '../ui/BoardView.js';
 import { EvalBar } from '../ui/EvalBar.js';
 import { MoveList } from '../ui/MoveList.js';
@@ -50,6 +51,9 @@ export class GameController {
 
     // Replay controls
     this._replayEl = null;
+
+    // Analysis pool for parallel post-game analysis
+    this._analysisPool = null;
 
     // Analysis cancel flag
     this._cancelAnalysis = false;
@@ -619,6 +623,10 @@ export class GameController {
     };
     this.analysisGraph.onCancel = () => {
       this._cancelAnalysis = true;
+      if (this._analysisPool) {
+        this._analysisPool.cancel();
+        this._analysisPool = null;
+      }
     };
 
     // Settings dialog
@@ -726,6 +734,7 @@ export class GameController {
 
   _restart() {
     this._cancelAnalysis = true;
+    if (this._analysisPool) { this._analysisPool.cancel(); this._analysisPool = null; }
     this._clearPendingTimeouts();
     this.chessClock.stop();
     this.gameOverOverlay.hide();
@@ -764,6 +773,7 @@ export class GameController {
 
   _newGame() {
     this._cancelAnalysis = true;
+    if (this._analysisPool) { this._analysisPool.cancel(); this._analysisPool = null; }
     this._clearPendingTimeouts();
     this.chessClock.stop();
     this.engine.stopAnalysis();
@@ -1033,39 +1043,34 @@ export class GameController {
     this.analysisGraph.showProgress();
 
     const moves = this.history.moves;
-    const total = moves.length;
-    const evaluations = [];
+    const fens = moves.map(m => m.fen);
 
-    for (let i = 0; i < total; i++) {
-      if (this._cancelAnalysis) {
-        this.analysisGraph.hide();
-        return;
-      }
+    // Use parallel worker pool for analysis
+    this._analysisPool = new AnalysisPool();
 
-      this.analysisGraph.updateProgress(i + 1, total);
+    const results = await this._analysisPool.analyze(
+      fens,
+      movetime,
+      (completed, total) => this.analysisGraph.updateProgress(completed, total)
+    );
 
-      const fen = moves[i].fen;
-      const result = await this.engine.analyzePosition(fen, movetime);
+    this._analysisPool = null;
 
-      if (this._cancelAnalysis) {
-        this.analysisGraph.hide();
-        return;
-      }
-
-      if (result) {
-        // Normalize to White's POV
-        let cpVal = evalToCp(result);
-        if (cpVal !== null) {
-          // Engine reports from side-to-move's perspective
-          // Parse whose turn it is from the FEN
-          const turnFromFen = fen.split(' ')[1];
-          if (turnFromFen === 'b') cpVal = -cpVal;
-        }
-        evaluations.push(cpVal);
-      } else {
-        evaluations.push(null);
-      }
+    if (!results || this._cancelAnalysis) {
+      this.analysisGraph.hide();
+      return;
     }
+
+    // Convert results to centipawn values normalized to White's POV
+    const evaluations = results.map((result, i) => {
+      if (!result) return null;
+      let cpVal = evalToCp(result);
+      if (cpVal !== null) {
+        const turnFromFen = fens[i].split(' ')[1];
+        if (turnFromFen === 'b') cpVal = -cpVal;
+      }
+      return cpVal;
+    });
 
     // Store results and show graph
     this.state.analysisResults = { evaluations, movetime };
