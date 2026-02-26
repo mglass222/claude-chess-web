@@ -202,6 +202,17 @@ export class EvalBar {
     this.scoreLabel.className = 'eval-score calculating';
   }
 
+  /** Instantly set the eval bar to a known centipawn value (no depth gating). */
+  setEvalCp(cp) {
+    if (cp === null || cp === undefined) return;
+    this._clearSettle();
+    this._pendingEval = null;
+    this._depthMet = true;
+    this._isMate = false;
+    this._mateIn = null;
+    this._setTarget(cp);
+  }
+
   reset() {
     if (this._rafId) {
       cancelAnimationFrame(this._rafId);

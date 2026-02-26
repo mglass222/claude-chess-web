@@ -111,7 +111,7 @@ export class GameController {
 
     this.moveList = new MoveList(rightPanel);
 
-    // Game info section (FEN + PGN) is built in _buildLeftPanel
+    // FEN bar is built in _buildBelowBoard
 
     this.analysisGraph = new AnalysisGraph(boardArea, rightPanel);
     this.promotionDialog = new PromotionDialog(boardArea);
@@ -192,8 +192,12 @@ export class GameController {
     settingsBtn.addEventListener('click', () => this._openSettings());
     this._leftPanelButtonsContainer.appendChild(settingsBtn);
 
-    // Game info section (FEN + PGN) below settings
-    this._buildGameInfo(this._leftPanelButtonsContainer);
+    // PGN button below settings
+    this._pgnCopyBtn = document.createElement('button');
+    this._pgnCopyBtn.className = 'panel-btn pgn-btn';
+    this._pgnCopyBtn.textContent = 'Copy PGN';
+    this._pgnCopyBtn.addEventListener('click', () => this._copyToClipboard(this._generatePgn(), this._pgnCopyBtn));
+    this._leftPanelButtonsContainer.appendChild(this._pgnCopyBtn);
 
     // Analyze Game button (shown only after game over)
     this._analyzeBtnEl = document.createElement('button');
@@ -480,56 +484,40 @@ export class GameController {
 
     const prevBtn = document.createElement('button');
     prevBtn.className = 'replay-btn';
-    prevBtn.innerHTML = '&#9664;'; // left arrow
+    prevBtn.textContent = '\u25C0'; // left arrow
     prevBtn.addEventListener('click', () => this._navigateHistory('back'));
 
     const nextBtn = document.createElement('button');
     nextBtn.className = 'replay-btn';
-    nextBtn.innerHTML = '&#9654;'; // right arrow
+    nextBtn.textContent = '\u25B6'; // right arrow
     nextBtn.addEventListener('click', () => this._navigateHistory('forward'));
 
     this._replayEl.appendChild(prevBtn);
     this._replayEl.appendChild(nextBtn);
     container.appendChild(this._replayEl);
 
+    // FEN bar below board
+    this._buildFenBar(container);
   }
 
-  _buildGameInfo(container) {
-    this._gameInfoEl = document.createElement('div');
-    this._gameInfoEl.className = 'game-info';
-    this._gameInfoEl.style.display = 'none';
-
-    // FEN section
-    const fenLabel = document.createElement('div');
-    fenLabel.className = 'game-info-label';
-    fenLabel.textContent = 'FEN';
-
-    const fenRow = document.createElement('div');
-    fenRow.className = 'game-info-row';
+  _buildFenBar(container) {
+    this._fenBarEl = document.createElement('div');
+    this._fenBarEl.className = 'fen-bar';
+    this._fenBarEl.style.display = 'none';
 
     this._fenInputEl = document.createElement('input');
     this._fenInputEl.type = 'text';
-    this._fenInputEl.className = 'fen-input';
+    this._fenInputEl.className = 'fen-input fen-input-wide';
     this._fenInputEl.readOnly = true;
 
     this._fenCopyBtn = document.createElement('button');
     this._fenCopyBtn.className = 'copy-btn';
-    this._fenCopyBtn.textContent = 'Copy';
+    this._fenCopyBtn.textContent = 'Copy FEN';
     this._fenCopyBtn.addEventListener('click', () => this._copyToClipboard(this._fenInputEl.value, this._fenCopyBtn));
 
-    fenRow.appendChild(this._fenInputEl);
-    fenRow.appendChild(this._fenCopyBtn);
-
-    // PGN button
-    this._pgnCopyBtn = document.createElement('button');
-    this._pgnCopyBtn.className = 'panel-btn pgn-btn';
-    this._pgnCopyBtn.textContent = 'Copy PGN';
-    this._pgnCopyBtn.addEventListener('click', () => this._copyToClipboard(this._generatePgn(), this._pgnCopyBtn));
-
-    this._gameInfoEl.appendChild(fenLabel);
-    this._gameInfoEl.appendChild(fenRow);
-    this._gameInfoEl.appendChild(this._pgnCopyBtn);
-    container.appendChild(this._gameInfoEl);
+    this._fenBarEl.appendChild(this._fenInputEl);
+    this._fenBarEl.appendChild(this._fenCopyBtn);
+    container.appendChild(this._fenBarEl);
   }
 
   _updateGameInfo() {
@@ -698,7 +686,7 @@ export class GameController {
     this._takeBackBtnEl.disabled = true;
     this._resignBtnEl.style.display = 'block';
     this._replayEl.style.display = 'none';
-    this._gameInfoEl.style.display = 'flex';
+    this._fenBarEl.style.display = 'flex';
     this._updateGameInfo();
 
     // Reset eval bar
@@ -1214,9 +1202,11 @@ export class GameController {
 
     this.moveList.render(this.history);
     this._updateGameInfo();
+    const viewIdx = this.history.getCurrentViewIndex();
     if (this.analysisGraph.visible) {
-      this.analysisGraph.setHighlight(this.history.getCurrentViewIndex());
+      this.analysisGraph.setHighlight(viewIdx);
     }
+    this._updateEvalBarFromAnalysis(viewIdx);
   }
 
   _goToMoveIndex(idx) {
@@ -1231,11 +1221,22 @@ export class GameController {
     if (this.analysisGraph.visible) {
       this.analysisGraph.setHighlight(idx);
     }
+    this._updateEvalBarFromAnalysis(idx);
   }
 
   _showPositionFromFen(fen) {
     const temp = new Chess(fen);
     this.boardView.updatePosition(temp.board());
+  }
+
+  _updateEvalBarFromAnalysis(moveIndex) {
+    if (!this.state.analysisResults) return;
+    const evals = this.state.analysisResults.evaluations;
+    if (!evals || moveIndex < 0 || moveIndex >= evals.length) return;
+    const cp = evals[moveIndex];
+    if (cp !== null && cp !== undefined) {
+      this.evalBar.setEvalCp(cp);
+    }
   }
 
   _handleKeyboard(e) {
@@ -1259,9 +1260,11 @@ export class GameController {
           if (fen) this._showPositionFromFen(fen);
           this.moveList.render(this.history);
           this._updateGameInfo();
+          const startIdx = this.history.getCurrentViewIndex();
           if (this.analysisGraph.visible) {
-            this.analysisGraph.setHighlight(this.history.getCurrentViewIndex());
+            this.analysisGraph.setHighlight(startIdx);
           }
+          this._updateEvalBarFromAnalysis(startIdx);
         }
         break;
       case 'ArrowDown':
@@ -1271,8 +1274,12 @@ export class GameController {
         this.boardView.updatePosition(this.state.board);
         this.moveList.render(this.history);
         this._updateGameInfo();
-        if (this.analysisGraph.visible) {
-          this.analysisGraph.setHighlight(this.history.getCurrentViewIndex());
+        {
+          const endIdx = this.history.getCurrentViewIndex();
+          if (this.analysisGraph.visible) {
+            this.analysisGraph.setHighlight(endIdx);
+          }
+          this._updateEvalBarFromAnalysis(endIdx);
         }
         break;
     }
@@ -1413,7 +1420,7 @@ export class GameController {
       // Hide clocks on load (time state is not preserved in saves)
       this.chessClock.hide();
       this.moveList.render(this.history);
-      this._gameInfoEl.style.display = 'flex';
+      this._fenBarEl.style.display = 'flex';
       this._updateGameInfo();
       this._leftPanelEl.style.display = 'flex';
       this._hintBtnEl.style.display = this.state.phase === 'over' ? 'none' : 'block';

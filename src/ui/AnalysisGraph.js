@@ -50,27 +50,11 @@ export class AnalysisGraph {
     this.graphPanel.className = 'analysis-graph-panel';
     this.graphPanel.style.display = 'none';
 
-    const header = document.createElement('div');
-    header.className = 'analysis-graph-header';
-
-    const title = document.createElement('span');
-    title.className = 'analysis-graph-title';
-    title.textContent = 'Analysis';
-
-    this.closeBtn = document.createElement('button');
-    this.closeBtn.className = 'analysis-graph-close-x';
-    this.closeBtn.textContent = '\u00d7';
-    this.closeBtn.addEventListener('click', () => this.hide());
-
-    header.appendChild(title);
-    header.appendChild(this.closeBtn);
-
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'analysis-graph-canvas';
     this.canvas.addEventListener('click', (e) => this._handleCanvasClick(e));
     this.canvas.addEventListener('mousemove', (e) => this._handleCanvasMouseMove(e));
 
-    this.graphPanel.appendChild(header);
     this.graphPanel.appendChild(this.canvas);
     this.rightPanel.appendChild(this.graphPanel);
 
@@ -86,8 +70,8 @@ export class AnalysisGraph {
 
   _sizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
-    const rect = this.graphPanel.getBoundingClientRect();
-    const w = rect.width - 8; // account for padding
+    const rect = this.rightPanel.getBoundingClientRect();
+    const w = rect.width;
     const h = 180;
     this.canvas.width = Math.round(w * dpr);
     this.canvas.height = Math.round(h * dpr);

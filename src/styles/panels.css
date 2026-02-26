@@ -555,29 +555,14 @@
 }
 
 
-/* Game Info (FEN + PGN) */
-.game-info {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 0 0;
-  margin-top: 12px;
-  border-top: 1px solid var(--glass-border);
-  flex-shrink: 0;
-  width: 100%;
-}
-
-.game-info-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: rgba(212, 208, 200, 0.5);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.game-info-row {
+/* FEN Bar (below board) */
+.fen-bar {
   display: flex;
   gap: 6px;
+  align-items: center;
+  width: 100%;
+  margin-left: 52px; /* align with board (eval bar width + gap) */
+  max-width: min(80vh, 700px);
 }
 
 .fen-input {
@@ -591,6 +576,11 @@
   font-size: 11px;
   padding: 6px 8px;
   outline: none;
+}
+
+.fen-input-wide {
+  font-size: 12px;
+  padding: 5px 10px;
 }
 
 .fen-input:focus {
@@ -650,42 +640,11 @@
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--glass-border);
-  padding: 4px;
-}
-
-.analysis-graph-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 4px 2px;
-}
-
-.analysis-graph-title {
-  font-family: var(--font-display);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--accent);
-  letter-spacing: 0.04em;
-}
-
-.analysis-graph-close-x {
-  background: none;
-  border: none;
-  color: rgba(212, 208, 200, 0.5);
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0 4px;
-  transition: color var(--transition-medium);
-}
-
-.analysis-graph-close-x:hover {
-  color: var(--panel-text);
 }
 
 .analysis-graph-canvas {
-  border-radius: 4px;
   display: block;
+  width: 100%;
 }
 
 .analysis-graph-close {
