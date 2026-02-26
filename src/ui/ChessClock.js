@@ -33,6 +33,12 @@ export class ChessClock {
     // Callback when time expires: onTimeOut('w') or onTimeOut('b')
     this.onTimeOut = null;
 
+    // Callback when a player's clock ticks below 10 seconds: onLowTimeTick('w'|'b')
+    this.onLowTimeTick = null;
+
+    // Track last whole-second value to fire warning once per second
+    this._lastWarnSecond = { w: -1, b: -1 };
+
     // Track which color the player is (for placing clocks correctly)
     this._playerColor = 'w';
   }
@@ -67,6 +73,7 @@ export class ChessClock {
     this._timeWhite = ms;
     this._timeBlack = ms;
     this._running = null;
+    this._lastWarnSecond = { w: -1, b: -1 };
 
     // Place clock elements on the correct sides
     this._attachClocks();
@@ -199,6 +206,15 @@ export class ChessClock {
       digits.textContent = `${minutes}:${String(seconds).padStart(2, '0')}.${tenths}`;
     } else {
       digits.textContent = `${minutes}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    // Low-time warning sound: fire once per second when under 10 seconds
+    if (ms > 0 && ms <= 10000 && this.onLowTimeTick && color === this._playerColor) {
+      const currentSecond = Math.ceil(ms / 1000);
+      if (currentSecond !== this._lastWarnSecond[color]) {
+        this._lastWarnSecond[color] = currentSecond;
+        this.onLowTimeTick(color);
+      }
     }
 
     // Urgency classes

@@ -64,4 +64,23 @@ export class SoundManager {
   setEnabled(enabled) {
     this.enabled = enabled;
   }
+
+  /** Play a short beep for low-time warning using oscillator (no WAV needed). */
+  playLowTimeWarning() {
+    if (!this.enabled || !this._ctx) return;
+    if (this._ctx.state === 'suspended') {
+      this._ctx.resume();
+    }
+
+    const osc = this._ctx.createOscillator();
+    const gain = this._ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.value = this.volume * 0.4;
+    gain.gain.exponentialRampToValueAtTime(0.001, this._ctx.currentTime + 0.15);
+    osc.connect(gain);
+    gain.connect(this._ctx.destination);
+    osc.start(this._ctx.currentTime);
+    osc.stop(this._ctx.currentTime + 0.15);
+  }
 }

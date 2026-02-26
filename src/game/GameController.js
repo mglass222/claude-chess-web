@@ -101,6 +101,7 @@ export class GameController {
     // Chess clocks (each placed on its color's side of the board)
     this.chessClock = new ChessClock(this._playerInfo, this._opponentInfo);
     this.chessClock.onTimeOut = (color) => this._handleTimeOut(color);
+    this.chessClock.onLowTimeTick = () => this.sound.playLowTimeWarning();
 
     // Settings (inline in left panel, must be created before _buildLeftPanel)
     this.settingsDialog = new SettingsDialog();
