@@ -46,7 +46,7 @@ export class SetupScreen {
     this.whiteBtn = document.createElement('button');
     this.whiteBtn.className = 'color-btn selected';
     this.whiteBtn.innerHTML = `
-      <img src="${import.meta.env.BASE_URL}pieces/wK.svg" alt="White King" class="color-king">
+      <img src="${import.meta.env.BASE_URL}pieces/cburnett/wK.svg" alt="White King" class="color-king">
       <span>White</span>
     `;
     this.whiteBtn.addEventListener('click', () => this._selectColor('w'));
@@ -55,7 +55,7 @@ export class SetupScreen {
     this.blackBtn = document.createElement('button');
     this.blackBtn.className = 'color-btn';
     this.blackBtn.innerHTML = `
-      <img src="${import.meta.env.BASE_URL}pieces/bK.svg" alt="Black King" class="color-king">
+      <img src="${import.meta.env.BASE_URL}pieces/cburnett/bK.svg" alt="Black King" class="color-king">
       <span>Black</span>
     `;
     this.blackBtn.addEventListener('click', () => this._selectColor('b'));

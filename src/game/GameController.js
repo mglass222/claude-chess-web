@@ -77,6 +77,7 @@ export class GameController {
     // Create UI components
     this.boardView = new BoardView(boardArea);
     this.boardView.applyTheme(this.settings.theme);
+    this.boardView.setPieceSet(this.settings.pieceSet);
 
     // Create a row wrapper for eval bar + board
     const boardColumn = document.getElementById('board-column');
@@ -101,6 +102,9 @@ export class GameController {
     this.chessClock = new ChessClock(this._playerInfo, this._opponentInfo);
     this.chessClock.onTimeOut = (color) => this._handleTimeOut(color);
 
+    // Settings (inline in left panel, must be created before _buildLeftPanel)
+    this.settingsDialog = new SettingsDialog();
+
     // Left panel buttons
     this._buildLeftPanel(leftPanel);
 
@@ -110,9 +114,9 @@ export class GameController {
 
     this.analysisGraph = new AnalysisGraph(boardArea);
     this.promotionDialog = new PromotionDialog(boardArea);
+    this.promotionDialog.pieceSet = this.settings.pieceSet;
     this.setupScreen = new SetupScreen(appContainer);
     this.gameOverOverlay = new GameOverOverlay(boardArea);
-    this.settingsDialog = new SettingsDialog(appContainer);
 
     // Settings button (added to left panel in _buildLeftPanel)
 
@@ -256,12 +260,12 @@ export class GameController {
 
     this._ngWhiteBtn = document.createElement('button');
     this._ngWhiteBtn.className = 'setup-color-btn selected';
-    this._ngWhiteBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}pieces/wK.svg" alt="White" class="setup-color-king"><span>White</span>`;
+    this._ngWhiteBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}pieces/${this.settings.pieceSet}/wK.svg" alt="White" class="setup-color-king"><span>White</span>`;
     this._ngWhiteBtn.addEventListener('click', () => this._ngSelectColor('w'));
 
     this._ngBlackBtn = document.createElement('button');
     this._ngBlackBtn.className = 'setup-color-btn';
-    this._ngBlackBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}pieces/bK.svg" alt="Black" class="setup-color-king"><span>Black</span>`;
+    this._ngBlackBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}pieces/${this.settings.pieceSet}/bK.svg" alt="Black" class="setup-color-king"><span>Black</span>`;
     this._ngBlackBtn.addEventListener('click', () => this._ngSelectColor('b'));
 
     ngColorRow.appendChild(this._ngWhiteBtn);
@@ -405,6 +409,7 @@ export class GameController {
     this._newGameSetup.appendChild(divider());
     this._newGameSetup.appendChild(ngBtnRow);
     this._leftPanelEl.appendChild(this._newGameSetup);
+    this._leftPanelEl.appendChild(this.settingsDialog.el);
 
     container.appendChild(this._leftPanelEl);
   }
@@ -620,6 +625,12 @@ export class GameController {
       this.boardView.applyTheme(theme);
       this._saveSettings();
     };
+    this.settingsDialog.onPieceSetChange = (pieceSet) => {
+      this.settings.pieceSet = pieceSet;
+      this.boardView.setPieceSet(pieceSet);
+      this.promotionDialog.pieceSet = pieceSet;
+      this._saveSettings();
+    };
     this.settingsDialog.onSoundToggle = () => {
       this.settings.soundEnabled = !this.settings.soundEnabled;
       this.sound.setEnabled(this.settings.soundEnabled);
@@ -631,6 +642,9 @@ export class GameController {
       this.sound.setVolume(this.settings.volume);
       this._saveSettings();
       this.settingsDialog.updateSettings(this.settings);
+    };
+    this.settingsDialog.onClose = () => {
+      this._leftPanelButtonsContainer.style.display = '';
     };
 
     // Engine analysis callback
@@ -1356,6 +1370,7 @@ export class GameController {
   // --- Settings & Persistence ---
 
   _openSettings() {
+    this._leftPanelButtonsContainer.style.display = 'none';
     this.settingsDialog.show(this.settings);
   }
 
@@ -1435,6 +1450,7 @@ export class GameController {
       difficulty: this.settings.difficulty,
       timeControl: this.settings.timeControl || 0,
       moveTime: this.settings.moveTime ?? null,
+      pieceSet: this.settings.pieceSet,
     }));
   }
 }

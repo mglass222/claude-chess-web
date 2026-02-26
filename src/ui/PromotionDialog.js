@@ -1,6 +1,7 @@
 export class PromotionDialog {
   constructor(container) {
     this.container = container;
+    this.pieceSet = 'cburnett';
     this._resolve = null;
     this._build();
   }
@@ -36,7 +37,7 @@ export class PromotionDialog {
         btn.className = 'promotion-piece';
         const img = document.createElement('img');
         const pieceCode = `${color}${piece.toUpperCase()}`;
-        img.src = `${import.meta.env.BASE_URL}pieces/${pieceCode}.svg`;
+        img.src = `${import.meta.env.BASE_URL}pieces/${this.pieceSet}/${pieceCode}.svg`;
         img.alt = pieceCode;
         btn.appendChild(img);
         btn.addEventListener('click', () => this.hide(piece));

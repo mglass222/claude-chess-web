@@ -21,6 +21,14 @@ export const THEMES = {
 
 export const THEME_NAMES = Object.keys(THEMES);
 
+export const PIECE_SETS = [
+  'alpha', 'caliente', 'california', 'cardinal', 'cburnett', 'celtic',
+  'chess7', 'chessnut', 'companion', 'cooke', 'dubrovny', 'fantasy',
+  'fresca', 'gioco', 'governor', 'icpieces', 'kosal', 'leipzig',
+  'maestro', 'merida', 'mpchess', 'pirouetti', 'rhosgfx', 'riohacha',
+  'spatial', 'staunty', 'tatiana', 'xkcd',
+];
+
 export const DIFFICULTY_LEVELS = [
   { id: 1,  label: 'Novice',       short: 'Nov',  skillLevel: 0,  depth: 3  },
   { id: 2,  label: 'Beginner',     short: 'Beg',  skillLevel: 3,  depth: 5  },
@@ -72,6 +80,7 @@ export const DEFAULTS = {
   playerColor: 'w',   // 'w' or 'b'
   difficulty: 1,
   theme: 'classic',
+  pieceSet: 'cburnett',
   volume: 0.5,
   soundEnabled: true,
   analysisDepth: 24,

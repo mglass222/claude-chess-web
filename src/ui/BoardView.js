@@ -7,6 +7,7 @@ export class BoardView {
   constructor(container) {
     this.container = container;
     this.flipped = false;       // true when playing black
+    this.pieceSet = 'cburnett'; // current piece set name
     this.selectedSquare = null;
     this.legalMoves = [];       // list of target square names like 'e4'
     this.lastMove = null;       // { from, to }
@@ -147,7 +148,7 @@ export class BoardView {
   _placePiece(square, color, type) {
     const img = document.createElement('img');
     const pieceCode = `${color === 'w' ? 'w' : 'b'}${type.toUpperCase()}`;
-    img.src = `${import.meta.env.BASE_URL}pieces/${pieceCode}.svg`;
+    img.src = `${import.meta.env.BASE_URL}pieces/${this.pieceSet}/${pieceCode}.svg`;
     img.className = 'piece';
     img.draggable = false;
     img.alt = pieceCode;
@@ -558,6 +559,17 @@ export class BoardView {
     document.removeEventListener('touchmove', this._boundTouchMove);
     document.removeEventListener('touchend', this._boundTouchEnd);
     this._cleanupDrag();
+  }
+
+  setPieceSet(name) {
+    this.pieceSet = name;
+    // Refresh all pieces on the board
+    for (const sq in this.pieces) {
+      if (this.pieces[sq]) {
+        const alt = this.pieces[sq].alt; // e.g. "wP", "bK"
+        this.pieces[sq].src = `${import.meta.env.BASE_URL}pieces/${this.pieceSet}/${alt}.svg`;
+      }
+    }
   }
 
   applyTheme(themeName) {
