@@ -1,4 +1,4 @@
-import { THEMES, ANIMATION_DURATION, COLORS } from '../config.js';
+import { THEMES, ANIMATION_DURATION, COLORS, ANNOTATION_COLORS } from '../config.js';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['1', '2', '3', '4', '5', '6', '7', '8'];
@@ -14,6 +14,9 @@ export class BoardView {
     this.squares = {};          // map of 'e4' -> div element
     this.pieces = {};           // map of 'e4' -> img element
     this.hintArrow = null;
+    this.annotations = [];    // [{ type: 'arrow'|'square', from, to?, color }]
+    this._rightClickFrom = null;
+    this._rightClickColor = 'orange';
     this.onSquareClick = null;  // callback(square)
     this.onPieceDragStart = null;
     this.onPieceDrop = null;
@@ -47,21 +50,41 @@ export class BoardView {
     this.svgOverlay.classList.add('board-svg-overlay');
     this.svgOverlay.setAttribute('viewBox', '0 0 800 800');
 
-    // Arrow marker definition (userSpaceOnUse for predictable sizing)
+    // Arrow marker definitions (userSpaceOnUse for predictable sizing)
     const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-    const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-    marker.setAttribute('id', 'arrowhead');
-    marker.setAttribute('markerWidth', '28');
-    marker.setAttribute('markerHeight', '24');
-    marker.setAttribute('refX', '0');
-    marker.setAttribute('refY', '12');
-    marker.setAttribute('orient', 'auto');
-    marker.setAttribute('markerUnits', 'userSpaceOnUse');
-    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-    polygon.setAttribute('points', '0 0, 28 12, 0 24');
-    polygon.setAttribute('fill', 'rgba(0, 220, 0, 0.85)');
-    marker.appendChild(polygon);
-    defs.appendChild(marker);
+
+    // Green hint arrowhead
+    const hintMarker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+    hintMarker.setAttribute('id', 'arrowhead');
+    hintMarker.setAttribute('markerWidth', '28');
+    hintMarker.setAttribute('markerHeight', '24');
+    hintMarker.setAttribute('refX', '0');
+    hintMarker.setAttribute('refY', '12');
+    hintMarker.setAttribute('orient', 'auto');
+    hintMarker.setAttribute('markerUnits', 'userSpaceOnUse');
+    const hintPolygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    hintPolygon.setAttribute('points', '0 0, 28 12, 0 24');
+    hintPolygon.setAttribute('fill', 'rgba(0, 220, 0, 0.85)');
+    hintMarker.appendChild(hintPolygon);
+    defs.appendChild(hintMarker);
+
+    // Annotation color arrowheads
+    for (const [colorName, colorValue] of Object.entries(ANNOTATION_COLORS)) {
+      const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+      marker.setAttribute('id', `arrowhead-${colorName}`);
+      marker.setAttribute('markerWidth', '28');
+      marker.setAttribute('markerHeight', '24');
+      marker.setAttribute('refX', '0');
+      marker.setAttribute('refY', '12');
+      marker.setAttribute('orient', 'auto');
+      marker.setAttribute('markerUnits', 'userSpaceOnUse');
+      const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      polygon.setAttribute('points', '0 0, 28 12, 0 24');
+      polygon.setAttribute('fill', colorValue);
+      marker.appendChild(polygon);
+      defs.appendChild(marker);
+    }
+
     this.svgOverlay.appendChild(defs);
 
     // Create 64 squares
@@ -362,6 +385,69 @@ export class BoardView {
     }
   }
 
+  _renderAnnotations() {
+    // Remove all existing annotation elements
+    for (const el of this.svgOverlay.querySelectorAll('.user-annotation')) {
+      el.remove();
+    }
+
+    for (const ann of this.annotations) {
+      const color = ANNOTATION_COLORS[ann.color];
+      if (ann.type === 'square') {
+        const { x, y } = this._squareToSvgCoords(ann.from);
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', x - 50);
+        rect.setAttribute('y', y - 50);
+        rect.setAttribute('width', '100');
+        rect.setAttribute('height', '100');
+        rect.setAttribute('fill', color);
+        rect.setAttribute('opacity', '0.5');
+        rect.classList.add('user-annotation');
+        this.svgOverlay.appendChild(rect);
+      } else if (ann.type === 'arrow') {
+        const fromCoords = this._squareToSvgCoords(ann.from);
+        const toCoords = this._squareToSvgCoords(ann.to);
+        const dx = toCoords.x - fromCoords.x;
+        const dy = toCoords.y - fromCoords.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const shortenedX = toCoords.x - (dx / len) * 28;
+        const shortenedY = toCoords.y - (dy / len) * 28;
+
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', fromCoords.x);
+        line.setAttribute('y1', fromCoords.y);
+        line.setAttribute('x2', shortenedX);
+        line.setAttribute('y2', shortenedY);
+        line.setAttribute('stroke', color);
+        line.setAttribute('stroke-width', '14');
+        line.setAttribute('stroke-linecap', 'round');
+        line.setAttribute('marker-end', `url(#arrowhead-${ann.color})`);
+        line.classList.add('user-annotation');
+        this.svgOverlay.appendChild(line);
+      }
+    }
+  }
+
+  _toggleAnnotation(type, from, to, color) {
+    const idx = this.annotations.findIndex(
+      a => a.type === type && a.from === from && a.to === to && a.color === color
+    );
+    if (idx !== -1) {
+      this.annotations.splice(idx, 1);
+    } else {
+      this.annotations.push({ type, from, to, color });
+    }
+    this._renderAnnotations();
+  }
+
+  clearAnnotations() {
+    if (this.annotations.length === 0) return;
+    this.annotations = [];
+    for (const el of this.svgOverlay.querySelectorAll('.user-annotation')) {
+      el.remove();
+    }
+  }
+
   _squareToSvgCoords(square) {
     const file = FILES.indexOf(square[0]);
     const rank = parseInt(square[1]) - 1;
@@ -391,10 +477,23 @@ export class BoardView {
     this.squares[square].classList.remove('legal-hover');
   }
 
+  _getAnnotationColor(e) {
+    if (e.shiftKey) return 'red';
+    if (e.ctrlKey || e.metaKey) return 'blue';
+    if (e.altKey) return 'yellow';
+    return 'orange';
+  }
+
   // Mouse / touch input
   _onMouseDown(e, square) {
     if (this._animating) return;
-    if (e.button !== 0) return; // only allow left-click
+    if (e.button === 2) {
+      this._rightClickFrom = square;
+      this._rightClickColor = this._getAnnotationColor(e);
+      return;
+    }
+    if (e.button !== 0) return;
+    this.clearAnnotations();
     e.preventDefault();
 
     const pieceEl = this.pieces[square];
@@ -461,6 +560,20 @@ export class BoardView {
   }
 
   _onMouseUp(e) {
+    if (e.button === 2 && this._rightClickFrom) {
+      const target = this._getSquareFromPoint(e.clientX, e.clientY);
+      const from = this._rightClickFrom;
+      const color = this._rightClickColor;
+      this._rightClickFrom = null;
+      if (!target) return;
+      if (target === from) {
+        this._toggleAnnotation('square', from, null, color);
+      } else {
+        this._toggleAnnotation('arrow', from, target, color);
+      }
+      return;
+    }
+
     // If mouse released without dragging, it was a click — already handled in mousedown
     if (this._pendingDrag) {
       this._pendingDrag = null;

@@ -115,3 +115,10 @@ export const COLORS = {
   legalMoveDot: 'rgba(50, 200, 50, 0.6)',
   hintGreen: 'rgba(0, 220, 0, 0.7)',
 };
+
+export const ANNOTATION_COLORS = {
+  orange: 'rgba(235, 137, 33, 0.8)',
+  red:    'rgba(220, 50, 50, 0.8)',
+  blue:   'rgba(50, 100, 220, 0.8)',
+  yellow: 'rgba(220, 200, 50, 0.8)',
+};
