@@ -117,8 +117,8 @@ export const COLORS = {
 };
 
 export const ANNOTATION_COLORS = {
-  orange: 'rgba(235, 137, 33, 0.8)',
-  red:    'rgba(220, 50, 50, 0.8)',
-  blue:   'rgba(50, 100, 220, 0.8)',
-  yellow: 'rgba(220, 200, 50, 0.8)',
+  orange: 'rgba(235, 137, 33, 0.6)',
+  red:    'rgba(220, 50, 50, 0.6)',
+  blue:   'rgba(50, 100, 220, 0.6)',
+  yellow: 'rgba(220, 200, 50, 0.6)',
 };

@@ -50,43 +50,6 @@ export class BoardView {
     this.svgOverlay.classList.add('board-svg-overlay');
     this.svgOverlay.setAttribute('viewBox', '0 0 800 800');
 
-    // Arrow marker definitions (userSpaceOnUse for predictable sizing)
-    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-
-    // Green hint arrowhead
-    const hintMarker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-    hintMarker.setAttribute('id', 'arrowhead');
-    hintMarker.setAttribute('markerWidth', '28');
-    hintMarker.setAttribute('markerHeight', '24');
-    hintMarker.setAttribute('refX', '0');
-    hintMarker.setAttribute('refY', '12');
-    hintMarker.setAttribute('orient', 'auto');
-    hintMarker.setAttribute('markerUnits', 'userSpaceOnUse');
-    const hintPolygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-    hintPolygon.setAttribute('points', '0 0, 28 12, 0 24');
-    hintPolygon.setAttribute('fill', 'rgba(0, 220, 0, 0.85)');
-    hintMarker.appendChild(hintPolygon);
-    defs.appendChild(hintMarker);
-
-    // Annotation color arrowheads
-    for (const [colorName, colorValue] of Object.entries(ANNOTATION_COLORS)) {
-      const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-      marker.setAttribute('id', `arrowhead-${colorName}`);
-      marker.setAttribute('markerWidth', '28');
-      marker.setAttribute('markerHeight', '24');
-      marker.setAttribute('refX', '0');
-      marker.setAttribute('refY', '12');
-      marker.setAttribute('orient', 'auto');
-      marker.setAttribute('markerUnits', 'userSpaceOnUse');
-      const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-      polygon.setAttribute('points', '0 0, 28 12, 0 24');
-      polygon.setAttribute('fill', colorValue);
-      marker.appendChild(polygon);
-      defs.appendChild(marker);
-    }
-
-    this.svgOverlay.appendChild(defs);
-
     // Create 64 squares
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
@@ -350,29 +313,10 @@ export class BoardView {
     this.squares[from]?.classList.add('hint-from');
     this.squares[to]?.classList.add('hint-to');
 
-    // Draw SVG arrow — shorten line so it ends at the arrowhead base
-    const fromCoords = this._squareToSvgCoords(from);
-    const toCoords = this._squareToSvgCoords(to);
-
-    const dx = toCoords.x - fromCoords.x;
-    const dy = toCoords.y - fromCoords.y;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    const arrowLen = 28; // matches marker width
-    const shortenedX = toCoords.x - (dx / len) * arrowLen;
-    const shortenedY = toCoords.y - (dy / len) * arrowLen;
-
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', fromCoords.x);
-    line.setAttribute('y1', fromCoords.y);
-    line.setAttribute('x2', shortenedX);
-    line.setAttribute('y2', shortenedY);
-    line.setAttribute('stroke', 'rgba(0, 220, 0, 0.85)');
-    line.setAttribute('stroke-width', '8');
-    line.setAttribute('marker-end', 'url(#arrowhead)');
-    line.classList.add('hint-arrow');
-
-    this.svgOverlay.appendChild(line);
-    this.hintArrow = line;
+    const arrow = this._createArrowPolygon(from, to, 'rgba(0, 220, 0, 0.65)', 10, 22);
+    arrow.classList.add('hint-arrow');
+    this.svgOverlay.appendChild(arrow);
+    this.hintArrow = arrow;
   }
 
   clearHintArrow() {
@@ -405,25 +349,9 @@ export class BoardView {
         rect.classList.add('user-annotation');
         this.svgOverlay.appendChild(rect);
       } else if (ann.type === 'arrow') {
-        const fromCoords = this._squareToSvgCoords(ann.from);
-        const toCoords = this._squareToSvgCoords(ann.to);
-        const dx = toCoords.x - fromCoords.x;
-        const dy = toCoords.y - fromCoords.y;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        const shortenedX = toCoords.x - (dx / len) * 28;
-        const shortenedY = toCoords.y - (dy / len) * 28;
-
-        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        line.setAttribute('x1', fromCoords.x);
-        line.setAttribute('y1', fromCoords.y);
-        line.setAttribute('x2', shortenedX);
-        line.setAttribute('y2', shortenedY);
-        line.setAttribute('stroke', color);
-        line.setAttribute('stroke-width', '14');
-        line.setAttribute('stroke-linecap', 'round');
-        line.setAttribute('marker-end', `url(#arrowhead-${ann.color})`);
-        line.classList.add('user-annotation');
-        this.svgOverlay.appendChild(line);
+        const arrow = this._createArrowPolygon(ann.from, ann.to, color, 14, 28);
+        arrow.classList.add('user-annotation');
+        this.svgOverlay.appendChild(arrow);
       }
     }
   }
@@ -461,6 +389,42 @@ export class BoardView {
       y = (7 - rank) * 100 + 50;
     }
     return { x, y };
+  }
+
+  // Build a single-polygon arrow from one square to another.
+  // shaftWidth = half-width of the shaft, headWidth = half-width of the arrowhead.
+  _createArrowPolygon(from, to, fill, shaftWidth, headWidth) {
+    const f = this._squareToSvgCoords(from);
+    const t = this._squareToSvgCoords(to);
+    const dx = t.x - f.x;
+    const dy = t.y - f.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+
+    // Unit vectors: along the arrow and perpendicular
+    const ux = dx / len;
+    const uy = dy / len;
+    const px = -uy; // perpendicular
+    const py = ux;
+
+    const headLen = headWidth * 1.3; // length of the arrowhead triangle
+    const neckX = t.x - ux * headLen; // where shaft meets head
+    const neckY = t.y - uy * headLen;
+
+    // 7 vertices: shaft left side, neck flare, tip, neck flare, shaft right side
+    const points = [
+      [f.x + px * shaftWidth, f.y + py * shaftWidth],     // shaft start left
+      [neckX + px * shaftWidth, neckY + py * shaftWidth],  // shaft end left
+      [neckX + px * headWidth, neckY + py * headWidth],    // head flare left
+      [t.x, t.y],                                          // tip
+      [neckX - px * headWidth, neckY - py * headWidth],    // head flare right
+      [neckX - px * shaftWidth, neckY - py * shaftWidth],  // shaft end right
+      [f.x - px * shaftWidth, f.y - py * shaftWidth],      // shaft start right
+    ].map(([x, y]) => `${x},${y}`).join(' ');
+
+    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    polygon.setAttribute('points', points);
+    polygon.setAttribute('fill', fill);
+    return polygon;
   }
 
   get isAnimating() {
