@@ -791,11 +791,14 @@
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: center;
+    gap: 4px;
+    padding: 4px 0;
   }
   .left-panel-buttons-inner {
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: center;
+    gap: 4px;
   }
   .inline-new-game-setup {
     max-width: 400px;
@@ -805,8 +808,11 @@
   }
   .panel-btn {
     width: auto;
-    padding: 8px 14px;
-    font-size: 13px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  .pgn-btn, .fen-btn, .settings-btn {
+    margin-top: 0;
   }
   .depth-slider-container {
     width: 200px;
@@ -814,5 +820,22 @@
   }
   .eval-bar {
     width: 30px;
+  }
+}
+
+@media (max-width: 1000px) and (orientation: landscape) {
+  .panel-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+  .left-panel-buttons {
+    gap: 3px;
+    padding: 2px 0;
+  }
+  .left-panel-buttons-inner {
+    gap: 3px;
+  }
+  .eval-bar {
+    width: 24px;
   }
 }

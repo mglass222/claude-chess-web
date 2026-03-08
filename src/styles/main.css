@@ -162,7 +162,7 @@ body::after {
   max-height: 100vh;
 }
 
-/* Responsive */
+/* Responsive — portrait mobile */
 @media (max-width: 1000px) {
   #game-layout,
   #game-layout.analysis-mode {
@@ -175,11 +175,12 @@ body::after {
     justify-content: center;
     border-right: none;
     border-bottom: 1px solid var(--glass-border);
-    padding: 8px;
+    padding: 6px 4px;
     order: -1;
+    gap: 4px;
   }
   #board-column {
-    padding: 8px 0;
+    padding: 4px 0;
     align-items: center;
   }
   #right-panel {
@@ -188,7 +189,7 @@ body::after {
     max-height: 200px;
   }
   #board-area {
-    width: min(90vw, calc(100vh - 300px));
+    width: min(90vw, calc(100vh - 240px));
   }
   #below-board {
     min-height: 44px;
@@ -197,11 +198,44 @@ body::after {
   .player-info {
     margin-left: 0;
     justify-content: center;
-    max-width: min(90vw, calc(100vh - 300px));
+    max-width: min(90vw, calc(100vh - 240px));
   }
   .fen-bar {
     margin-left: 0;
-    max-width: min(90vw, calc(100vh - 300px));
+    max-width: min(90vw, calc(100vh - 240px));
+  }
+}
+
+/* Responsive — landscape mobile */
+@media (max-width: 1000px) and (orientation: landscape) {
+  #game-layout,
+  #game-layout.analysis-mode {
+    grid-template-rows: auto 1fr auto;
+    overflow-y: auto;
+  }
+  #left-panel {
+    padding: 4px;
+    gap: 3px;
+  }
+  #board-column {
+    padding: 2px 0;
+  }
+  #board-area {
+    width: min(60vw, calc(100vh - 80px));
+  }
+  #right-panel {
+    max-height: 150px;
+  }
+  #below-board {
+    min-height: 32px;
+    padding: 2px 0;
+  }
+  .player-info {
+    max-width: min(60vw, calc(100vh - 80px));
+    padding: 2px 0;
+  }
+  .fen-bar {
+    max-width: min(60vw, calc(100vh - 80px));
   }
 }
 
