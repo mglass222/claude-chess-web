@@ -164,10 +164,22 @@ body::after {
 
 /* Responsive — portrait mobile */
 @media (max-width: 1000px) {
+  /* Don't vertically center: on mobile 100vh exceeds the visible viewport
+     (dynamic address bar), so centering pushes the top button row off-screen.
+     Anchor to the top and let the page scroll naturally instead. */
+  #app-container {
+    align-items: flex-start;
+    height: auto;
+    min-height: 100%;
+  }
   #game-layout,
   #game-layout.analysis-mode {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr auto;
+    height: auto;
+    max-height: none;
+    min-height: 100vh;
+    min-height: 100dvh;
   }
   #left-panel {
     flex-direction: row;
