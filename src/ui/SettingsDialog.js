@@ -91,8 +91,8 @@ export class SettingsDialog {
   }
 
   show(settings) {
-    this._currentThemeIndex = THEME_NAMES.indexOf(settings.theme) || 0;
-    this._currentPieceSetIndex = PIECE_SETS.indexOf(settings.pieceSet) || 0;
+    this._currentThemeIndex = this._getIndexOrDefault(THEME_NAMES, settings.theme);
+    this._currentPieceSetIndex = this._getIndexOrDefault(PIECE_SETS, settings.pieceSet);
     this._updateSoundLabel(settings.soundEnabled);
     this._updateVolumeLabel(settings.volume);
     this._updateThemeLabel();
@@ -120,6 +120,11 @@ export class SettingsDialog {
   _updatePieceSetLabel() {
     const name = PIECE_SETS[this._currentPieceSetIndex];
     this.pieceSetBtn.textContent = `Pieces: ${name.charAt(0).toUpperCase() + name.slice(1)}`;
+  }
+
+  _getIndexOrDefault(items, value) {
+    const idx = items.indexOf(value);
+    return idx >= 0 ? idx : 0;
   }
 
   updateSettings(settings) {

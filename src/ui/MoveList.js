@@ -24,6 +24,7 @@ export class MoveList {
   render(moveHistory) {
     this.listEl.innerHTML = '';
     const moves = moveHistory.getMoves();
+    let activeMoveEl = null;
 
     if (moves.length === 0) {
       const empty = document.createElement('div');
@@ -53,6 +54,7 @@ export class MoveList {
       const wIdx = i + 1;
       if (wIdx === currentViewIdx) {
         whiteMove.classList.add('active');
+        activeMoveEl = whiteMove;
       }
       whiteMove.addEventListener('click', () => {
         if (this.onMoveClick) this.onMoveClick(wIdx);
@@ -67,6 +69,7 @@ export class MoveList {
         const bIdx = i + 2;
         if (bIdx === currentViewIdx) {
           blackMove.classList.add('active');
+          activeMoveEl = blackMove;
         }
         blackMove.addEventListener('click', () => {
           if (this.onMoveClick) this.onMoveClick(bIdx);
@@ -77,8 +80,11 @@ export class MoveList {
       this.listEl.appendChild(row);
     }
 
-    // Auto-scroll to bottom
-    this.listEl.scrollTop = this.listEl.scrollHeight;
+    if (moveHistory.isAtCurrentPosition()) {
+      this.listEl.scrollTop = this.listEl.scrollHeight;
+    } else if (activeMoveEl) {
+      activeMoveEl.scrollIntoView({ block: 'nearest' });
+    }
   }
 
   clear() {

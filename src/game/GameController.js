@@ -63,6 +63,7 @@ export class GameController {
 
     // Tracked timeouts for cleanup
     this._pendingTimeouts = [];
+    this._gameSessionId = 0;
   }
 
   async init() {
@@ -720,9 +721,7 @@ export class GameController {
   }
 
   _restart() {
-    this._cancelAnalysis = true;
-    if (this._analysisPool) { this._analysisPool.cancel(); this._analysisPool = null; }
-    this._clearPendingTimeouts();
+    this._cancelTransientGameWork();
     this.chessClock.stop();
     this.gameOverOverlay.hide();
     this._analyzeBtnEl.style.display = 'none';
@@ -761,11 +760,8 @@ export class GameController {
   }
 
   _newGame() {
-    this._cancelAnalysis = true;
-    if (this._analysisPool) { this._analysisPool.cancel(); this._analysisPool = null; }
-    this._clearPendingTimeouts();
+    this._cancelTransientGameWork();
     this.chessClock.stop();
-    this.engine.stopAnalysis();
     this._showNewGameDialog();
   }
 
@@ -905,12 +901,16 @@ export class GameController {
     if (this.state.phase !== 'playing') return;
     if (this.state.isPlayerTurn) return;
     if (this.boardView.isAnimating) return;
+    const sessionId = this._gameSessionId;
 
     // Stop analysis while getting AI move
     this.engine.stopAnalysis();
 
     const moveTimeSec = this.state.moveTime != null ? this.state.moveTime : null;
     const moveUci = await this.engine.getMove(this.state.fen, this.state.difficulty, moveTimeSec);
+    if (sessionId !== this._gameSessionId || this.state.phase !== 'playing' || this.state.isPlayerTurn) {
+      return;
+    }
     if (!moveUci || moveUci === '(none)') {
       console.warn('Engine failed to produce a move, retrying...');
       this._setTimeout(() => this._makeAIMove(), 500);
@@ -946,6 +946,9 @@ export class GameController {
 
     // Animate
     await this.boardView.animateMove(from, to, this.state.board);
+    if (sessionId !== this._gameSessionId || this.state.phase !== 'playing') {
+      return;
+    }
 
     // Update UI
     this.boardView.setLastMove(from, to);
@@ -969,6 +972,7 @@ export class GameController {
   }
 
   _handleGameOver() {
+    this.engine.cancelPendingMove();
     this.engine.stopAnalysis();
     this.chessClock.stop();
     this._hintBtnEl.style.display = 'none';
@@ -1088,6 +1092,7 @@ export class GameController {
 
     // Clear pending timeouts (cancel scheduled AI move)
     this._clearPendingTimeouts();
+    this.engine.cancelPendingMove();
     this.engine.stopAnalysis();
 
     // Determine how many half-moves to undo
@@ -1401,8 +1406,20 @@ export class GameController {
     this._pendingTimeouts = [];
   }
 
-  destroy() {
+  _cancelTransientGameWork() {
+    this._gameSessionId++;
+    this._cancelAnalysis = true;
+    if (this._analysisPool) {
+      this._analysisPool.cancel();
+      this._analysisPool = null;
+    }
     this._clearPendingTimeouts();
+    this.engine.cancelPendingMove();
+    this.engine.stopAnalysis();
+  }
+
+  destroy() {
+    this._cancelTransientGameWork();
     document.removeEventListener('keydown', this._boundKeyboard);
     this.boardView.destroy();
     this.evalBar.destroy();
@@ -1460,6 +1477,8 @@ export class GameController {
       return;
     }
     try {
+      this._cancelTransientGameWork();
+      this.chessClock.stop();
       const data = JSON.parse(raw);
       const moveData = this.state.deserialize(data);
       if (moveData) {
@@ -1469,7 +1488,6 @@ export class GameController {
       this.boardView.renderPosition(this.state.board, this.state.playerColor);
       this.evalBar.setPlayerColor(this.state.playerColor);
       this.evalBar.reset();
-      // Hide clocks on load (time state is not preserved in saves)
       this.chessClock.hide();
       this.moveList.render(this.history);
       this._updateGameInfo();

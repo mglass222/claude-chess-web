@@ -6,6 +6,8 @@ export class GameState {
     this.chess = new Chess();
     this.playerColor = DEFAULTS.playerColor;
     this.difficulty = DEFAULTS.difficulty;
+    this.timeControl = 0;
+    this.moveTime = null;
     this.analysisDepth = DEFAULTS.analysisDepth;
 
     // Game phase
@@ -156,6 +158,8 @@ export class GameState {
       fen: this.fen,
       playerColor: this.playerColor,
       difficulty: this.difficulty,
+      timeControl: this.timeControl,
+      moveTime: this.moveTime,
       analysisResults: this.analysisResults,
       moveHistory: moveHistory ? moveHistory.serialize() : null,
     };
@@ -165,9 +169,13 @@ export class GameState {
     this.chess.load(data.fen);
     this.playerColor = data.playerColor;
     this.difficulty = data.difficulty;
+    this.timeControl = data.timeControl ?? 0;
+    this.moveTime = data.moveTime ?? null;
     this.phase = 'playing';
     this.winner = null;
     this.analysisResults = data.analysisResults || null;
+    this.lastPlayerColor = this.playerColor;
+    this.lastDifficulty = this.difficulty;
     this.checkGameOver();
     return data.moveHistory || null;
   }

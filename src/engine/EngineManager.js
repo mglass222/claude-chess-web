@@ -14,6 +14,8 @@ export class EngineManager {
     this._readyCallback = null;
     this._analysisTimeoutId = null;
     this._moveTimeoutId = null;
+    this._pendingMoveResolve = null;
+    this._moveRequestId = 0;
   }
 
   async init() {
@@ -145,28 +147,42 @@ export class EngineManager {
         return;
       }
 
+      this.cancelPendingMove();
+
       // Stop any ongoing analysis
       this.stopAnalysis();
+      const requestId = ++this._moveRequestId;
+      this._pendingMoveResolve = resolve;
+
+      const finish = (moveUci) => {
+        if (requestId !== this._moveRequestId) return;
+        if (this._moveTimeoutId) {
+          clearTimeout(this._moveTimeoutId);
+          this._moveTimeoutId = null;
+        }
+        this.onBestMove = null;
+        this._readyCallback = null;
+        if (this._pendingMoveResolve === resolve) {
+          this._pendingMoveResolve = null;
+        }
+        resolve(moveUci);
+      };
 
       // Timeout safety: resolve with null if engine doesn't respond
       const timeout = moveTimeSec ? (moveTimeSec * 1000 + ENGINE_MOVE_TIMEOUT) : ENGINE_MOVE_TIMEOUT;
       this._moveTimeoutId = setTimeout(() => {
-        this._moveTimeoutId = null;
+        if (requestId !== this._moveRequestId) return;
         console.warn('Engine move timed out');
-        this.onBestMove = null;
         this.worker.postMessage('stop');
-        resolve(null);
+        finish(null);
       }, timeout);
 
       // Wait for readyok to ensure the "stop" bestmove has been flushed,
       // then set the callback and start the search
       this._readyCallback = () => {
+        if (requestId !== this._moveRequestId) return;
         this.onBestMove = (moveUci) => {
-          if (this._moveTimeoutId) {
-            clearTimeout(this._moveTimeoutId);
-            this._moveTimeoutId = null;
-          }
-          resolve(moveUci);
+          finish(moveUci);
         };
         this.worker.postMessage(`position fen ${fen}`);
         if (moveTimeSec != null && moveTimeSec > 0) {
@@ -181,6 +197,24 @@ export class EngineManager {
       };
       this.worker.postMessage('isready');
     });
+  }
+
+  cancelPendingMove() {
+    this._moveRequestId++;
+    if (this._moveTimeoutId) {
+      clearTimeout(this._moveTimeoutId);
+      this._moveTimeoutId = null;
+    }
+    this._readyCallback = null;
+    this.onBestMove = null;
+    if (this._pendingMoveResolve) {
+      const resolve = this._pendingMoveResolve;
+      this._pendingMoveResolve = null;
+      resolve(null);
+    }
+    if (this.ready && this.worker) {
+      this.worker.postMessage('stop');
+    }
   }
 
   startAnalysis(fen, maxDepth = 18) {
@@ -253,13 +287,10 @@ export class EngineManager {
   }
 
   destroy() {
+    this.cancelPendingMove();
     if (this._analysisTimeoutId) {
       clearTimeout(this._analysisTimeoutId);
       this._analysisTimeoutId = null;
-    }
-    if (this._moveTimeoutId) {
-      clearTimeout(this._moveTimeoutId);
-      this._moveTimeoutId = null;
     }
     if (this.worker) {
       this.worker.postMessage('quit');
