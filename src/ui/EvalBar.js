@@ -50,7 +50,7 @@ export class EvalBar {
       const tick = document.createElement('div');
       tick.className = 'eval-tick';
       // Position: 0cp = 50%, +1000cp = 0% (top/white), -1000cp = 100% (bottom/black)
-      const pct = 50 - (i * 5);
+      const pct = 50 - i * 5;
       tick.style.top = `${pct}%`;
       this.tickContainer.appendChild(tick);
     }
@@ -89,7 +89,7 @@ export class EvalBar {
 
     let newCp;
     if (mate !== null && mate !== undefined) {
-      newCp = mate > 0 ? (10000 - Math.abs(mate) * 100) : (-10000 + Math.abs(mate) * 100);
+      newCp = mate > 0 ? 10000 - Math.abs(mate) * 100 : -10000 + Math.abs(mate) * 100;
     } else if (cp !== null && cp !== undefined) {
       newCp = cp;
     } else {
@@ -182,11 +182,6 @@ export class EvalBar {
         this.scoreLabel.className = 'eval-score black-advantage';
       }
     }
-  }
-
-  _showCalculating() {
-    this.scoreLabel.textContent = '...';
-    this.scoreLabel.className = 'eval-score calculating';
   }
 
   /** Instantly set the eval bar to a known centipawn value (no depth gating). */

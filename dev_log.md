@@ -7,6 +7,78 @@ Update this file whenever the program changes.
 
 ## 2026-05-28
 
+### Refactor — split the GameController god object (Tier 3)
+Pulled three self-contained concerns out of the 1,556-line `GameController`,
+which is now **1,264 lines**. Pure structural refactor — no behavior change;
+lint + build green, and the full New Game flow (color/difficulty/time-control
+selection, Start as Black → board flip + AI first move + clock init, and Cancel)
+was verified in-browser with zero console errors.
+
+- **`src/game/pgn.js`** — `generatePgn(state, history)`, extracted from
+  `_generatePgn()`.
+- **`src/game/settingsStore.js`** — `loadSettings()` / `saveSettings()`
+  (localStorage + legacy-save migration), extracted from `_loadSettings()` /
+  `_saveSettings()`.
+- **`src/ui/NewGameSetup.js`** — the inline new-game panel (~180 lines of DOM
+  building + the `_ng*` state/handlers) is now a self-contained component with
+  `onStart` / `onCancel` callbacks and `show(settings)` / `hide()`, matching the
+  pattern of the other UI components. `GameController` keeps only the small
+  `_startNewGame` / `_showNewGameSetup` / `_hideNewGameSetup` glue.
+  The now-unused `DIFFICULTY_LEVELS` / `TIME_CONTROLS` imports were dropped from
+  `GameController`.
+
+### Refactor — shared UCI helper + de-duplicated check-highlight logic
+Consolidated duplication flagged in the audit (no behavior change; lint + build
+green, verified in-browser that the engine still loads, plays, and drives the
+eval bar):
+
+- **New `src/engine/uci.js`** holds the two helpers `EngineManager` and
+  `AnalysisPool` had each copied: `parseInfoLine()` (parses UCI `info` lines —
+  the two copies had already drifted, one keeping the full PV and the other only
+  the best move) and `stockfishWorkerUrl()` (worker-URL construction). Both
+  engine classes import them now.
+  *(src/engine/uci.js, src/engine/EngineManager.js, src/engine/AnalysisPool.js)*
+- **`findKingSquare(board, color)`** — extracted the identical 8×8 king-search
+  loop that `_showPositionFromFen` and `_updateCheckHighlight` each inlined.
+  *(src/game/GameController.js)*
+
+### Tooling — ESLint + Prettier, enforced in CI
+Added linting/formatting so issues like the dead code below get caught
+automatically going forward.
+
+- **ESLint** (flat config) with the recommended ruleset + browser globals. The
+  first run found and fixed 3 real issues: a useless `let` init in
+  `_navigateHistory`, an unused `catch` binding in `_loadSettings`, and an
+  unused `square` param on `PromotionDialog.show()`.
+- **Prettier** (`.prettierrc.json`: 100-col, single quotes, ES5 commas) tuned to
+  the existing style; formatted the codebase to one consistent baseline.
+- **Scripts** `lint` / `lint:fix` / `format` / `format:check`; the Pages
+  workflow now runs `lint` + `format:check` before building.
+  *(package.json, eslint.config.js, .prettierrc.json, .prettierignore,
+  .github/workflows/deploy.yml)*
+
+### Dead-code cleanup — removed an unused module, methods, and exports
+A codebase audit surfaced several pieces of code with zero call sites. Removed
+them with no behavior change (build green; verified in-browser that play, move
+history, and the New Game flow all still work):
+
+- **`SetupScreen` (entire component).** The old new-game popup was replaced by
+  the inline left-panel setup, so `setupScreen.show()` was never called. Deleted
+  `src/ui/SetupScreen.js` and its wiring (import, field, `onStart` handler, two
+  dead `.hide()` calls, the `appContainer` lookup). The now-orphaned
+  `DIFFICULTY_OPTIONS` export went with it.
+  *(src/ui/SetupScreen.js, src/game/GameController.js, src/config.js)*
+- **`EngineManager.analyzePosition()`** — superseded by `AnalysisPool`, no
+  callers. *(src/engine/EngineManager.js)*
+- **`_updateGameInfo()`** — an empty no-op still called in ~10 places (left over
+  from the removed FEN bar). Removed the method and every call.
+  *(src/game/GameController.js)*
+- **`EvalBar._showCalculating()`** and the unused **`COLORS`** palette export
+  (plus its dead import in `BoardView`).
+  *(src/ui/EvalBar.js, src/config.js, src/ui/BoardView.js)*
+
+Net: one fewer module (24 vs 25 build modules), ~250 fewer lines.
+
 ### Evaluation bar — fixed freeze/jump, fluctuation, and sign-flipping
 The eval bar misbehaved in three distinct ways; all were tracked to how engine
 output reached the bar.

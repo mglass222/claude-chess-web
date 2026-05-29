@@ -3,8 +3,8 @@ export class AnalysisGraph {
     this.boardArea = boardArea;
     this.rightPanel = rightPanel;
     this.visible = false;
-    this.onMoveClick = null;  // callback(moveIndex)
-    this.onCancel = null;     // callback()
+    this.onMoveClick = null; // callback(moveIndex)
+    this.onCancel = null; // callback()
     this._points = [];
     this._evaluations = null;
     this._classifications = null;
@@ -150,7 +150,7 @@ export class AnalysisGraph {
       const curr = evaluations[i];
       if (prev === null || prev === undefined || curr === null || curr === undefined) continue;
 
-      const whiteJustMoved = (i % 2 === 1);
+      const whiteJustMoved = i % 2 === 1;
 
       // Win% from the moving side's perspective before and after
       const winBefore = whiteJustMoved ? this._cpToWinPct(prev) : this._cpToWinPct(-prev);
@@ -165,21 +165,23 @@ export class AnalysisGraph {
       const oppPrevEval = i >= 2 ? evaluations[i - 2] : null;
 
       // --- Bad moves ---
-      if (eploss >= 0.20) {
+      if (eploss >= 0.2) {
         classifications[i] = { type: 'blunder', color: '#ca3431' };
-      } else if (eploss >= 0.10) {
+      } else if (eploss >= 0.1) {
         // Miss: opponent blundered on previous move but we failed to capitalize
         // Detected when: opponent's move (i-1) lost significant win%, and now
         // our move also loses win% instead of punishing them
         let isMiss = false;
         if (oppPrevEval !== null && oppPrevEval !== undefined && i >= 2) {
-          const oppWhiteMoved = ((i - 1) % 2 === 1);
-          const oppWinBefore = oppWhiteMoved ? this._cpToWinPct(oppPrevEval) : this._cpToWinPct(-oppPrevEval);
+          const oppWhiteMoved = (i - 1) % 2 === 1;
+          const oppWinBefore = oppWhiteMoved
+            ? this._cpToWinPct(oppPrevEval)
+            : this._cpToWinPct(-oppPrevEval);
           const oppWinAfter = oppWhiteMoved ? this._cpToWinPct(prev) : this._cpToWinPct(-prev);
           const oppEploss = (oppWinBefore - oppWinAfter) / 100;
           // Opponent lost 10%+ win chance (made a mistake/blunder) and we had
           // a strong position but failed to maintain advantage
-          if (oppEploss >= 0.10 && posBefore > 100) {
+          if (oppEploss >= 0.1 && posBefore > 100) {
             isMiss = true;
           }
         }
@@ -197,7 +199,7 @@ export class AnalysisGraph {
 
         // Brilliant: best/near-best move involving a material sacrifice
         // in a competitive (non-winning) position
-        const cpLoss = whiteJustMoved ? (prev - curr) : (curr - prev);
+        const cpLoss = whiteJustMoved ? prev - curr : curr - prev;
         const isSacrifice = cpLoss < -100;
         const notAlreadyWinning = posBefore < 300;
         if (isSacrifice && notAlreadyWinning) {
@@ -260,7 +262,7 @@ export class AnalysisGraph {
       if (ev === null || ev === undefined) continue;
       const px = margin + i * xStep;
       const clamped = Math.max(-clamp, Math.min(clamp, ev));
-      let py = centerY - (clamped * gh / 2 / clamp);
+      let py = centerY - (clamped * gh) / 2 / clamp;
       py = Math.max(margin, Math.min(bottom, py));
       this._points.push({ x: px, y: py, idx: i });
     }
@@ -287,7 +289,7 @@ export class AnalysisGraph {
     ctx.stroke();
 
     // Highlighted move: dashed vertical line
-    const highlightPoint = this._points.find(p => p.idx === this._highlightIndex);
+    const highlightPoint = this._points.find((p) => p.idx === this._highlightIndex);
     if (highlightPoint) {
       ctx.save();
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';

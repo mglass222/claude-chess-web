@@ -12,7 +12,7 @@ export class GameState {
 
     // Game phase
     this.phase = 'setup'; // 'setup' | 'playing' | 'over'
-    this.winner = null;   // 'White' | 'Black' | null (draw)
+    this.winner = null; // 'White' | 'Black' | null (draw)
 
     // UI state
     this.settingsOpen = false;
@@ -24,7 +24,7 @@ export class GameState {
 
     // Analysis state
     this.analyzing = false;
-    this.evaluation = null;       // { cp, mate, depth }
+    this.evaluation = null; // { cp, mate, depth }
     this.analysisInfo = null;
     this.draggingDepthSlider = false;
 

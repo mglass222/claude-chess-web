@@ -18,10 +18,12 @@ export class SoundManager {
     const types = ['move', 'capture', 'check', 'lowtime'];
     for (const type of types) {
       fetch(`${base}sounds/${type}.mp3`)
-        .then(r => r.arrayBuffer())
-        .then(buf => this._ctx.decodeAudioData(buf))
-        .then(decoded => { this._buffers[type] = decoded; })
-        .catch(e => console.warn(`Failed to load ${type} sound:`, e));
+        .then((r) => r.arrayBuffer())
+        .then((buf) => this._ctx.decodeAudioData(buf))
+        .then((decoded) => {
+          this._buffers[type] = decoded;
+        })
+        .catch((e) => console.warn(`Failed to load ${type} sound:`, e));
     }
 
     // Resume AudioContext on first user interaction

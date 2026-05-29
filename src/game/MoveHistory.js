@@ -1,7 +1,7 @@
 export class MoveHistory {
   constructor() {
-    this.moves = [];          // [{ san, fen }] - san is null for initial position
-    this.currentIndex = -1;   // -1 means at latest position
+    this.moves = []; // [{ san, fen }] - san is null for initial position
+    this.currentIndex = -1; // -1 means at latest position
   }
 
   addMove(san, fen) {
@@ -100,11 +100,11 @@ export class MoveHistory {
   }
 
   serialize() {
-    return this.moves.map(m => ({ san: m.san, fen: m.fen }));
+    return this.moves.map((m) => ({ san: m.san, fen: m.fen }));
   }
 
   deserialize(data) {
-    this.moves = data.map(m => ({ san: m.san, fen: m.fen }));
+    this.moves = data.map((m) => ({ san: m.san, fen: m.fen }));
     this.currentIndex = -1;
   }
 }

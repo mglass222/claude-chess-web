@@ -1,6 +1,8 @@
 import { Chess } from 'chess.js';
 import { GameState } from './GameState.js';
 import { MoveHistory } from './MoveHistory.js';
+import { generatePgn } from './pgn.js';
+import { loadSettings, saveSettings } from './settingsStore.js';
 import { EngineManager } from '../engine/EngineManager.js';
 import { AnalysisPool } from '../engine/AnalysisPool.js';
 import { BoardView } from '../ui/BoardView.js';
@@ -8,12 +10,28 @@ import { EvalBar } from '../ui/EvalBar.js';
 import { MoveList } from '../ui/MoveList.js';
 import { AnalysisGraph } from '../ui/AnalysisGraph.js';
 import { PromotionDialog } from '../ui/PromotionDialog.js';
-import { SetupScreen } from '../ui/SetupScreen.js';
 import { GameOverOverlay } from '../ui/GameOverOverlay.js';
 import { SettingsDialog } from '../ui/SettingsDialog.js';
+import { NewGameSetup } from '../ui/NewGameSetup.js';
 import { SoundManager } from '../ui/SoundManager.js';
 import { ChessClock } from '../ui/ChessClock.js';
-import { DEFAULTS, DIFFICULTY_LEVELS, MOVE_TIME_OPTIONS, TIME_CONTROLS, evalToCp, getDifficultyLabel } from '../config.js';
+import { MOVE_TIME_OPTIONS, evalToCp, getDifficultyLabel } from '../config.js';
+
+/**
+ * Return the algebraic square (e.g. 'e1') of the given color's king, or null.
+ * `board` is a chess.js board() array (board[0] is rank 8, board[7] is rank 1).
+ */
+function findKingSquare(board, color) {
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const p = board[r][c];
+      if (p && p.type === 'k' && p.color === color) {
+        return String.fromCharCode(97 + c) + (8 - r);
+      }
+    }
+  }
+  return null;
+}
 
 export class GameController {
   constructor() {
@@ -23,7 +41,7 @@ export class GameController {
     this.sound = new SoundManager();
 
     // Settings (persisted to localStorage)
-    this.settings = this._loadSettings();
+    this.settings = loadSettings();
 
     // UI components (created in init)
     this.boardView = null;
@@ -31,9 +49,9 @@ export class GameController {
     this.moveList = null;
     this.analysisGraph = null;
     this.promotionDialog = null;
-    this.setupScreen = null;
     this.gameOverOverlay = null;
     this.settingsDialog = null;
+    this.newGameSetup = null;
     this.chessClock = null;
 
     // Left panel buttons
@@ -76,7 +94,6 @@ export class GameController {
     const boardArea = document.getElementById('board-area');
     const leftPanel = document.getElementById('left-panel');
     const rightPanel = document.getElementById('right-panel');
-    const appContainer = document.getElementById('app-container');
     const belowBoard = document.getElementById('below-board');
 
     // Create UI components
@@ -121,7 +138,6 @@ export class GameController {
     this.analysisGraph = new AnalysisGraph(boardArea, rightPanel);
     this.promotionDialog = new PromotionDialog(boardArea);
     this.promotionDialog.pieceSet = this.settings.pieceSet;
-    this.setupScreen = new SetupScreen(appContainer);
     this.gameOverOverlay = new GameOverOverlay(boardArea);
 
     // Settings button (added to left panel in _buildLeftPanel)
@@ -193,14 +209,18 @@ export class GameController {
     this._pgnCopyBtn = document.createElement('button');
     this._pgnCopyBtn.className = 'panel-btn pgn-btn';
     this._pgnCopyBtn.textContent = 'Copy PGN';
-    this._pgnCopyBtn.addEventListener('click', () => this._copyToClipboard(this._generatePgn(), this._pgnCopyBtn));
+    this._pgnCopyBtn.addEventListener('click', () =>
+      this._copyToClipboard(generatePgn(this.state, this.history), this._pgnCopyBtn)
+    );
     this._leftPanelButtonsContainer.appendChild(this._pgnCopyBtn);
 
     // FEN button below PGN
     this._fenCopyBtn = document.createElement('button');
     this._fenCopyBtn.className = 'panel-btn fen-btn';
     this._fenCopyBtn.textContent = 'Copy FEN';
-    this._fenCopyBtn.addEventListener('click', () => this._copyToClipboard(this._getCurrentFen(), this._fenCopyBtn));
+    this._fenCopyBtn.addEventListener('click', () =>
+      this._copyToClipboard(this._getCurrentFen(), this._fenCopyBtn)
+    );
     this._leftPanelButtonsContainer.appendChild(this._fenCopyBtn);
 
     // Settings button (below Copy FEN)
@@ -234,7 +254,12 @@ export class GameController {
 
     this._inlineSelectedTime = 3000;
     this._inlineTimeBtns = [];
-    for (const { label, ms } of [{ label: '1s', ms: 1000 }, { label: '3s', ms: 3000 }, { label: '5s', ms: 5000 }, { label: '10s', ms: 10000 }]) {
+    for (const { label, ms } of [
+      { label: '1s', ms: 1000 },
+      { label: '3s', ms: 3000 },
+      { label: '5s', ms: 5000 },
+      { label: '10s', ms: 10000 },
+    ]) {
       const btn = document.createElement('button');
       btn.className = 'analysis-time-btn';
       if (ms === 3000) btn.classList.add('selected');
@@ -263,229 +288,39 @@ export class GameController {
     this._leftPanelEl.appendChild(this._leftPanelButtonsContainer);
 
     // Inline new game setup (replaces popup overlay)
-    this._newGameSetup = document.createElement('div');
-    this._newGameSetup.className = 'inline-new-game-setup';
-    this._newGameSetup.style.display = 'none';
-
-    // --- Play As section ---
-    const ngColorLabel = document.createElement('div');
-    ngColorLabel.className = 'setup-section-label';
-    ngColorLabel.textContent = 'Play As';
-
-    const ngColorRow = document.createElement('div');
-    ngColorRow.className = 'setup-color-row';
-
-    this._ngWhiteBtn = document.createElement('button');
-    this._ngWhiteBtn.className = 'setup-color-btn selected';
-    this._ngWhiteBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}pieces/${this.settings.pieceSet}/wK.svg" alt="White" class="setup-color-king"><span>White</span>`;
-    this._ngWhiteBtn.addEventListener('click', () => this._ngSelectColor('w'));
-
-    this._ngBlackBtn = document.createElement('button');
-    this._ngBlackBtn.className = 'setup-color-btn';
-    this._ngBlackBtn.innerHTML = `<img src="${import.meta.env.BASE_URL}pieces/${this.settings.pieceSet}/bK.svg" alt="Black" class="setup-color-king"><span>Black</span>`;
-    this._ngBlackBtn.addEventListener('click', () => this._ngSelectColor('b'));
-
-    ngColorRow.appendChild(this._ngWhiteBtn);
-    ngColorRow.appendChild(this._ngBlackBtn);
-
-    // --- Difficulty section ---
-    const ngDiffLabel = document.createElement('div');
-    ngDiffLabel.className = 'setup-section-label';
-    ngDiffLabel.textContent = 'Difficulty';
-
-    this._ngSelectedColor = this.settings.playerColor;
-    this._ngSelectedDifficulty = this.settings.difficulty;
-
-    this._ngDiffSelect = document.createElement('select');
-    this._ngDiffSelect.className = 'setup-diff-select';
-    for (const level of DIFFICULTY_LEVELS) {
-      const opt = document.createElement('option');
-      opt.value = level.id;
-      opt.textContent = level.label;
-      if (level.id === this._ngSelectedDifficulty) opt.selected = true;
-      this._ngDiffSelect.appendChild(opt);
-    }
-    this._ngDiffSelect.addEventListener('change', () => {
-      this._ngSelectedDifficulty = parseInt(this._ngDiffSelect.value);
-      this._ngSelectEngineMode('difficulty');
-    });
-    // Also switch mode when clicking the dropdown even if the value doesn't change
-    this._ngDiffSelect.addEventListener('mousedown', () => {
-      this._ngSelectedDifficulty = parseInt(this._ngDiffSelect.value);
-      this._ngSelectEngineMode('difficulty');
-    });
-
-    // --- Engine Think Time section (alternative to difficulty) ---
-    const ngMoveTimeLabel = document.createElement('div');
-    ngMoveTimeLabel.className = 'setup-section-label';
-    ngMoveTimeLabel.textContent = 'Or: Think Time Per Move';
-
-    const ngMoveTimeGrid = document.createElement('div');
-    ngMoveTimeGrid.className = 'setup-time-grid';
-
-    this._ngSelectedMoveTime = this.settings.moveTime ?? null;
-    this._ngMoveTimeBtns = [];
-    for (const mt of MOVE_TIME_OPTIONS) {
-      const btn = document.createElement('button');
-      btn.className = 'setup-time-btn' + (this._ngSelectedMoveTime === mt.seconds ? ' selected' : '');
-      btn.dataset.seconds = mt.seconds;
-      btn.textContent = mt.label;
-      btn.addEventListener('click', () => {
-        this._ngSelectedMoveTime = mt.seconds;
-        for (const b of this._ngMoveTimeBtns) b.classList.toggle('selected', parseInt(b.dataset.seconds) === mt.seconds);
-        this._ngSelectEngineMode('movetime');
-      });
-      ngMoveTimeGrid.appendChild(btn);
-      this._ngMoveTimeBtns.push(btn);
-    }
-
-    // Apply initial visual state
-    this._ngEngineMode = this.settings.moveTime != null ? 'movetime' : 'difficulty';
-    this._ngDiffSelect.style.opacity = this._ngEngineMode === 'difficulty' ? '1' : '0.4';
-    for (const b of this._ngMoveTimeBtns) {
-      if (this._ngEngineMode !== 'movetime') b.classList.remove('selected');
-    }
-
-    // --- Time Control section ---
-    const ngTimeLabel = document.createElement('div');
-    ngTimeLabel.className = 'setup-section-label';
-    ngTimeLabel.textContent = 'Time Control';
-
-    const ngTimeGrid = document.createElement('div');
-    ngTimeGrid.className = 'setup-time-grid';
-
-    this._ngSelectedTime = this.settings.timeControl || 0;
-    this._ngTimeBtns = [];
-    for (const tc of TIME_CONTROLS) {
-      if (tc.minutes === 0) continue; // "None" handled separately below
-      const btn = document.createElement('button');
-      btn.className = 'setup-time-btn' + (tc.minutes === this._ngSelectedTime ? ' selected' : '');
-      btn.dataset.minutes = tc.minutes;
-      btn.textContent = tc.label;
-      btn.addEventListener('click', () => {
-        this._ngSelectedTime = tc.minutes;
-        for (const b of this._ngTimeBtns) b.classList.toggle('selected', parseInt(b.dataset.minutes) === tc.minutes);
-      });
-      ngTimeGrid.appendChild(btn);
-      this._ngTimeBtns.push(btn);
-    }
-
-    // No time limit button (infinity)
-    const ngNoTimeBtn = document.createElement('button');
-    ngNoTimeBtn.className = 'setup-time-btn setup-time-btn-infinite' + (this._ngSelectedTime === 0 ? ' selected' : '');
-    ngNoTimeBtn.dataset.minutes = 0;
-    ngNoTimeBtn.innerHTML = '&#8734;';
-    ngNoTimeBtn.addEventListener('click', () => {
-      this._ngSelectedTime = 0;
-      for (const b of this._ngTimeBtns) b.classList.toggle('selected', parseInt(b.dataset.minutes) === 0);
-    });
-    this._ngTimeBtns.push(ngNoTimeBtn);
-
-    // --- Action buttons ---
-    const ngBtnRow = document.createElement('div');
-    ngBtnRow.className = 'setup-action-row';
-
-    const ngStartBtn = document.createElement('button');
-    ngStartBtn.className = 'panel-btn';
-    ngStartBtn.textContent = 'Start Game';
-    ngStartBtn.addEventListener('click', () => {
-      this.state.playerColor = this._ngSelectedColor;
-      this.state.difficulty = this._ngSelectedDifficulty;
-      this.state.timeControl = this._ngSelectedTime;
-      this.state.moveTime = this._ngEngineMode === 'movetime' ? this._ngSelectedMoveTime : null;
-      this.settings.playerColor = this._ngSelectedColor;
-      this.settings.difficulty = this._ngSelectedDifficulty;
-      this.settings.timeControl = this._ngSelectedTime;
-      this.settings.moveTime = this.state.moveTime;
-      this._saveSettings();
-      this._hideNewGameSetup();
-      this._startGame();
-    });
-
-    const ngCancelBtn = document.createElement('button');
-    ngCancelBtn.className = 'panel-btn panel-btn-secondary';
-    ngCancelBtn.textContent = 'Cancel';
-    ngCancelBtn.addEventListener('click', () => this._hideNewGameSetup());
-
-    ngBtnRow.appendChild(ngStartBtn);
-    ngBtnRow.appendChild(ngCancelBtn);
-
-    // Divider helper
-    const divider = () => {
-      const d = document.createElement('div');
-      d.className = 'setup-divider';
-      return d;
-    };
-
-    this._newGameSetup.appendChild(ngColorLabel);
-    this._newGameSetup.appendChild(ngColorRow);
-    this._newGameSetup.appendChild(divider());
-    this._newGameSetup.appendChild(ngDiffLabel);
-    this._newGameSetup.appendChild(this._ngDiffSelect);
-    this._newGameSetup.appendChild(ngMoveTimeLabel);
-    this._newGameSetup.appendChild(ngMoveTimeGrid);
-    this._newGameSetup.appendChild(divider());
-    this._newGameSetup.appendChild(ngTimeLabel);
-    this._newGameSetup.appendChild(ngTimeGrid);
-    this._newGameSetup.appendChild(ngNoTimeBtn);
-    this._newGameSetup.appendChild(divider());
-    this._newGameSetup.appendChild(ngBtnRow);
-    this._leftPanelEl.appendChild(this._newGameSetup);
+    this.newGameSetup = new NewGameSetup(this.settings.pieceSet);
+    this.newGameSetup.onStart = (opts) => this._startNewGame(opts);
+    this.newGameSetup.onCancel = () => this._hideNewGameSetup();
+    this._leftPanelEl.appendChild(this.newGameSetup.el);
     this._leftPanelEl.appendChild(this.settingsDialog.el);
 
     container.appendChild(this._leftPanelEl);
   }
 
-  _ngSelectColor(color) {
-    this._ngSelectedColor = color;
-    this._ngWhiteBtn.classList.toggle('selected', color === 'w');
-    this._ngBlackBtn.classList.toggle('selected', color === 'b');
-  }
-
-  _ngSelectEngineMode(mode) {
-    this._ngEngineMode = mode;
-    if (mode === 'difficulty') {
-      this._ngSelectedMoveTime = null;
-      this._ngDiffSelect.style.opacity = '1';
-      for (const b of this._ngMoveTimeBtns) b.classList.remove('selected');
-    } else {
-      this._ngDiffSelect.style.opacity = '0.4';
-    }
+  _startNewGame({ color, difficulty, timeControl, moveTime }) {
+    this.state.playerColor = color;
+    this.state.difficulty = difficulty;
+    this.state.timeControl = timeControl;
+    this.state.moveTime = moveTime;
+    this.settings.playerColor = color;
+    this.settings.difficulty = difficulty;
+    this.settings.timeControl = timeControl;
+    this.settings.moveTime = moveTime;
+    saveSettings(this.settings);
+    this._hideNewGameSetup();
+    this._startGame();
   }
 
   _showNewGameSetup() {
-    // Sync current settings
-    this._ngSelectedColor = this.settings.playerColor;
-    this._ngSelectedDifficulty = this.settings.difficulty;
-    this._ngSelectedTime = this.settings.timeControl || 0;
-    this._ngSelectedMoveTime = this.settings.moveTime ?? null;
-    this._ngSelectColor(this._ngSelectedColor);
-    this._ngDiffSelect.value = this._ngSelectedDifficulty;
-    for (const b of this._ngTimeBtns) b.classList.toggle('selected', parseInt(b.dataset.minutes) === this._ngSelectedTime);
-
-    // Sync engine mode
-    this._ngEngineMode = this._ngSelectedMoveTime != null ? 'movetime' : 'difficulty';
-    this._ngDiffSelect.style.opacity = this._ngEngineMode === 'difficulty' ? '1' : '0.4';
-    for (const b of this._ngMoveTimeBtns) {
-      b.classList.toggle('selected', this._ngEngineMode === 'movetime' && parseInt(b.dataset.seconds) === this._ngSelectedMoveTime);
-    }
-
-    // Hide normal buttons, show setup
     this._leftPanelButtonsContainer.style.display = 'none';
-    this._newGameSetup.style.display = 'flex';
-
-    // Blur and deactivate the board
-    const boardColumn = document.getElementById('board-column');
-    boardColumn.classList.add('board-inactive');
+    this.newGameSetup.show(this.settings);
+    document.getElementById('board-column').classList.add('board-inactive');
   }
 
   _hideNewGameSetup() {
-    this._newGameSetup.style.display = 'none';
+    this.newGameSetup.hide();
     this._leftPanelButtonsContainer.style.display = 'flex';
-
-    // Restore the board
-    const boardColumn = document.getElementById('board-column');
-    boardColumn.classList.remove('board-inactive');
+    document.getElementById('board-column').classList.remove('board-inactive');
   }
 
   _buildBelowBoard(container) {
@@ -507,7 +342,6 @@ export class GameController {
     this._replayEl.appendChild(prevBtn);
     this._replayEl.appendChild(nextBtn);
     container.appendChild(this._replayEl);
-
   }
 
   _getCurrentFen() {
@@ -518,66 +352,24 @@ export class GameController {
     return this.state.fen;
   }
 
-  _updateGameInfo() {
-    // No-op: FEN bar removed, FEN is now copied via left panel button
-  }
-
-  _generatePgn() {
-    const date = new Date();
-    const dateStr = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
-    const isWhite = this.state.lastPlayerColor === 'w';
-    let engineLabel;
-    if (this.state.moveTime != null) {
-      const mtOpt = MOVE_TIME_OPTIONS.find(o => o.seconds === this.state.moveTime);
-      engineLabel = `Stockfish (${mtOpt ? mtOpt.label : this.state.moveTime + 's'}/move)`;
-    } else {
-      engineLabel = `Stockfish (${getDifficultyLabel(this.state.lastDifficulty)})`;
-    }
-    const white = isWhite ? 'You' : engineLabel;
-    const black = isWhite ? engineLabel : 'You';
-
-    let result = '*';
-    if (this.state.phase === 'over') {
-      if (this.state.winner === 'White') result = '1-0';
-      else if (this.state.winner === 'Black') result = '0-1';
-      else result = '1/2-1/2';
-    }
-
-    let pgn = '';
-    pgn += `[Event "Claude Chess"]\n`;
-    pgn += `[Site "-"]\n`;
-    pgn += `[Date "${dateStr}"]\n`;
-    pgn += `[Round "-"]\n`;
-    pgn += `[White "${white}"]\n`;
-    pgn += `[Black "${black}"]\n`;
-    pgn += `[Result "${result}"]\n\n`;
-
-    // Build move text from history
-    const moves = this.history.getMoves();
-    for (let i = 0; i < moves.length; i++) {
-      if (i % 2 === 0) pgn += `${Math.floor(i / 2) + 1}. `;
-      pgn += moves[i].san + ' ';
-    }
-    pgn += result;
-
-    return pgn.trim();
-  }
-
   _copyToClipboard(text, btn) {
     const original = btn.textContent;
-    navigator.clipboard.writeText(text).then(() => {
-      btn.textContent = 'Copied!';
-      btn.classList.add('copied');
-      this._setTimeout(() => {
-        btn.textContent = original;
-        btn.classList.remove('copied');
-      }, 1500);
-    }).catch(() => {
-      btn.textContent = 'Failed!';
-      this._setTimeout(() => {
-        btn.textContent = original;
-      }, 1500);
-    });
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        this._setTimeout(() => {
+          btn.textContent = original;
+          btn.classList.remove('copied');
+        }, 1500);
+      })
+      .catch(() => {
+        btn.textContent = 'Failed!';
+        this._setTimeout(() => {
+          btn.textContent = original;
+        }, 1500);
+      });
   }
 
   _wireCallbacks() {
@@ -587,16 +379,6 @@ export class GameController {
 
     // Move list clicks
     this.moveList.onMoveClick = (idx) => this._goToMoveIndex(idx);
-
-    // Setup screen (new game dialog)
-    this.setupScreen.onStart = ({ color, difficulty }) => {
-      this.state.playerColor = color;
-      this.state.difficulty = difficulty;
-      this.settings.playerColor = color;
-      this.settings.difficulty = difficulty;
-      this._saveSettings();
-      this._startGame();
-    };
 
     // Game over overlay
     this.gameOverOverlay.onRestart = () => this._restart();
@@ -620,24 +402,24 @@ export class GameController {
     this.settingsDialog.onThemeChange = (theme) => {
       this.settings.theme = theme;
       this.boardView.applyTheme(theme);
-      this._saveSettings();
+      saveSettings(this.settings);
     };
     this.settingsDialog.onPieceSetChange = (pieceSet) => {
       this.settings.pieceSet = pieceSet;
       this.boardView.setPieceSet(pieceSet);
       this.promotionDialog.pieceSet = pieceSet;
-      this._saveSettings();
+      saveSettings(this.settings);
     };
     this.settingsDialog.onSoundToggle = () => {
       this.settings.soundEnabled = !this.settings.soundEnabled;
       this.sound.setEnabled(this.settings.soundEnabled);
-      this._saveSettings();
+      saveSettings(this.settings);
       this.settingsDialog.updateSettings(this.settings);
     };
     this.settingsDialog.onVolumeChange = (delta) => {
       this.settings.volume = Math.max(0, Math.min(1, this.settings.volume + delta));
       this.sound.setVolume(this.settings.volume);
-      this._saveSettings();
+      saveSettings(this.settings);
       this.settingsDialog.updateSettings(this.settings);
     };
     this.settingsDialog.onClose = () => {
@@ -658,7 +440,6 @@ export class GameController {
   }
 
   _startGame() {
-    this.setupScreen.hide();
     this.gameOverOverlay.hide();
     this._analyzeBtnEl.style.display = 'none';
     this._analyzeBtnEl.classList.remove('best-move-btn');
@@ -683,7 +464,6 @@ export class GameController {
     this._takeBackBtnEl.disabled = true;
     this._resignBtnEl.style.display = 'block';
     this._replayEl.style.display = 'none';
-    this._updateGameInfo();
 
     // Reset eval bar
     this.evalBar.reset();
@@ -749,7 +529,6 @@ export class GameController {
     this._resignBtnEl.style.display = 'block';
     this._takeBackBtnEl.disabled = true;
     this._replayEl.style.display = 'none';
-    this._updateGameInfo();
 
     this.engine.setDifficulty(this.state.difficulty, this.state.moveTime);
     this._startAnalysis();
@@ -816,10 +595,11 @@ export class GameController {
       const promoRank = this.state.playerColor === 'w' ? '8' : '1';
       if (to[1] === promoRank) {
         // Check if the move is legal with any promotion
-        const testMove = this.state.chess.moves({ square: from, verbose: true })
-          .find(m => m.to === to && m.promotion);
+        const testMove = this.state.chess
+          .moves({ square: from, verbose: true })
+          .find((m) => m.to === to && m.promotion);
         if (testMove) {
-          const choice = await this.promotionDialog.show(this.state.playerColor, to);
+          const choice = await this.promotionDialog.show(this.state.playerColor);
           if (choice) {
             await this._executeMove({ from, to, promotion: choice });
           }
@@ -864,7 +644,6 @@ export class GameController {
 
     // Update move list
     this.moveList.render(this.history);
-    this._updateGameInfo();
 
     // Enable take back
     this._takeBackBtnEl.disabled = false;
@@ -908,7 +687,11 @@ export class GameController {
 
     const moveTimeSec = this.state.moveTime != null ? this.state.moveTime : null;
     const moveUci = await this.engine.getMove(this.state.fen, this.state.difficulty, moveTimeSec);
-    if (sessionId !== this._gameSessionId || this.state.phase !== 'playing' || this.state.isPlayerTurn) {
+    if (
+      sessionId !== this._gameSessionId ||
+      this.state.phase !== 'playing' ||
+      this.state.isPlayerTurn
+    ) {
       return;
     }
     if (!moveUci || moveUci === '(none)') {
@@ -954,7 +737,6 @@ export class GameController {
     this.boardView.setLastMove(from, to);
     this._updateCheckHighlight();
     this.moveList.render(this.history);
-    this._updateGameInfo();
 
     // Check game over
     if (this.state.checkGameOver()) {
@@ -1043,15 +825,13 @@ export class GameController {
     this.analysisGraph.showProgress();
 
     const moves = this.history.moves;
-    const fens = moves.map(m => m.fen);
+    const fens = moves.map((m) => m.fen);
 
     // Use parallel worker pool for analysis
     this._analysisPool = new AnalysisPool();
 
-    const results = await this._analysisPool.analyze(
-      fens,
-      movetime,
-      (completed, total) => this.analysisGraph.updateProgress(completed, total)
+    const results = await this._analysisPool.analyze(fens, movetime, (completed, total) =>
+      this.analysisGraph.updateProgress(completed, total)
     );
 
     this._analysisPool = null;
@@ -1073,7 +853,7 @@ export class GameController {
     });
 
     // Extract best moves per position
-    const bestMoves = results.map(r => r?.bestMove || null);
+    const bestMoves = results.map((r) => r?.bestMove || null);
 
     // Store results and show graph
     this.state.analysisResults = { evaluations, bestMoves, movetime };
@@ -1121,7 +901,6 @@ export class GameController {
 
     // Update move list
     this.moveList.render(this.history);
-    this._updateGameInfo();
 
     // Disable take back if no moves left
     this._takeBackBtnEl.disabled = this.history.length === 0;
@@ -1230,12 +1009,7 @@ export class GameController {
   // --- Navigation ---
 
   _navigateHistory(direction) {
-    let fen = null;
-    if (direction === 'back') {
-      fen = this.history.goBack();
-    } else {
-      fen = this.history.goForward();
-    }
+    const fen = direction === 'back' ? this.history.goBack() : this.history.goForward();
 
     if (fen !== null) {
       this._showPositionFromFen(fen);
@@ -1246,7 +1020,6 @@ export class GameController {
     }
 
     this.moveList.render(this.history);
-    this._updateGameInfo();
     const viewIdx = this.history.getCurrentViewIndex();
     if (this.analysisGraph.visible) {
       this.analysisGraph.setHighlight(viewIdx);
@@ -1264,7 +1037,6 @@ export class GameController {
       this._updateCheckHighlight();
     }
     this.moveList.render(this.history);
-    this._updateGameInfo();
     if (this.analysisGraph.visible) {
       this.analysisGraph.setHighlight(idx);
     }
@@ -1276,21 +1048,7 @@ export class GameController {
     const temp = new Chess(fen);
     this.boardView.updatePosition(temp.board());
     // Show check highlight only if this position is in check
-    if (temp.isCheck()) {
-      const board = temp.board();
-      const turn = temp.turn();
-      for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-          const p = board[r][c];
-          if (p && p.type === 'k' && p.color === turn) {
-            this.boardView.setCheck(String.fromCharCode(97 + c) + (8 - r));
-            return;
-          }
-        }
-      }
-    } else {
-      this.boardView.setCheck(null);
-    }
+    this.boardView.setCheck(temp.isCheck() ? findKingSquare(temp.board(), temp.turn()) : null);
   }
 
   _updateEvalBarFromAnalysis(moveIndex) {
@@ -1323,7 +1081,6 @@ export class GameController {
           const fen = this.history.goToStart();
           if (fen) this._showPositionFromFen(fen);
           this.moveList.render(this.history);
-          this._updateGameInfo();
           const startIdx = this.history.getCurrentViewIndex();
           if (this.analysisGraph.visible) {
             this.analysisGraph.setHighlight(startIdx);
@@ -1339,7 +1096,6 @@ export class GameController {
         this.boardView.updatePosition(this.state.board);
         this._updateCheckHighlight();
         this.moveList.render(this.history);
-        this._updateGameInfo();
         {
           const endIdx = this.history.getCurrentViewIndex();
           if (this.analysisGraph.visible) {
@@ -1387,7 +1143,7 @@ export class GameController {
     opponentAvatar.textContent = isWhite ? 'B' : 'W';
     opponentAvatar.className = `player-avatar ${isWhite ? 'black-piece' : 'white-piece'}`;
     if (this.state.moveTime != null) {
-      const mtOpt = MOVE_TIME_OPTIONS.find(o => o.seconds === this.state.moveTime);
+      const mtOpt = MOVE_TIME_OPTIONS.find((o) => o.seconds === this.state.moveTime);
       const mtLabel = mtOpt ? mtOpt.label : `${this.state.moveTime}s`;
       opponentName.textContent = `Stockfish (${mtLabel}/move)`;
     } else {
@@ -1402,7 +1158,7 @@ export class GameController {
 
   _setTimeout(fn, delay) {
     const id = setTimeout(() => {
-      this._pendingTimeouts = this._pendingTimeouts.filter(t => t !== id);
+      this._pendingTimeouts = this._pendingTimeouts.filter((t) => t !== id);
       fn();
     }, delay);
     this._pendingTimeouts.push(id);
@@ -1442,29 +1198,14 @@ export class GameController {
   _getPieceAt(square) {
     const board = this.state.board;
     const file = square.charCodeAt(0) - 97; // 'a' = 0
-    const rank = parseInt(square[1]) - 1;    // '1' = 0
+    const rank = parseInt(square[1]) - 1; // '1' = 0
     const row = 7 - rank;
     return board[row][file];
   }
 
   _updateCheckHighlight() {
-    if (this.state.isCheck()) {
-      // Find the king in check
-      const board = this.state.board;
-      const turn = this.state.turn;
-      for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-          const p = board[r][c];
-          if (p && p.type === 'k' && p.color === turn) {
-            const sq = String.fromCharCode(97 + c) + (8 - r);
-            this.boardView.setCheck(sq);
-            return;
-          }
-        }
-      }
-    } else {
-      this.boardView.setCheck(null);
-    }
+    const sq = this.state.isCheck() ? findKingSquare(this.state.board, this.state.turn) : null;
+    this.boardView.setCheck(sq);
   }
 
   // --- Settings & Persistence ---
@@ -1494,13 +1235,11 @@ export class GameController {
       if (moveData) {
         this.history.deserialize(moveData);
       }
-      this.setupScreen.hide();
       this.boardView.renderPosition(this.state.board, this.state.playerColor);
       this.evalBar.setPlayerColor(this.state.playerColor);
       this.evalBar.reset();
       this.chessClock.hide();
       this.moveList.render(this.history);
-      this._updateGameInfo();
       this._leftPanelEl.style.display = 'flex';
       this._hintBtnEl.style.display = this.state.phase === 'over' ? 'none' : 'block';
       this._takeBackBtnEl.style.display = this.state.phase === 'over' ? 'none' : 'block';
@@ -1521,36 +1260,5 @@ export class GameController {
     } catch (e) {
       console.error('Failed to load game:', e);
     }
-  }
-
-  _loadSettings() {
-    const raw = localStorage.getItem('claude-chess-settings');
-    if (raw) {
-      try {
-        const settings = { ...DEFAULTS, ...JSON.parse(raw) };
-        // Migrate old settings to new difficulty/time system
-        if (!('timeControl' in settings)) {
-          settings.difficulty = DEFAULTS.difficulty;
-          settings.timeControl = 0;
-        }
-        return settings;
-      } catch (e) {
-        // ignore
-      }
-    }
-    return { ...DEFAULTS };
-  }
-
-  _saveSettings() {
-    localStorage.setItem('claude-chess-settings', JSON.stringify({
-      theme: this.settings.theme,
-      volume: this.settings.volume,
-      soundEnabled: this.settings.soundEnabled,
-      playerColor: this.settings.playerColor,
-      difficulty: this.settings.difficulty,
-      timeControl: this.settings.timeControl || 0,
-      moveTime: this.settings.moveTime ?? null,
-      pieceSet: this.settings.pieceSet,
-    }));
   }
 }

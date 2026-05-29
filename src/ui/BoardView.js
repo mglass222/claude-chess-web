@@ -1,4 +1,4 @@
-import { THEMES, ANIMATION_DURATION, COLORS, ANNOTATION_COLORS } from '../config.js';
+import { THEMES, ANIMATION_DURATION, ANNOTATION_COLORS } from '../config.js';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['1', '2', '3', '4', '5', '6', '7', '8'];
@@ -6,18 +6,18 @@ const RANKS = ['1', '2', '3', '4', '5', '6', '7', '8'];
 export class BoardView {
   constructor(container) {
     this.container = container;
-    this.flipped = false;       // true when playing black
+    this.flipped = false; // true when playing black
     this.pieceSet = 'cburnett'; // current piece set name
     this.selectedSquare = null;
-    this.legalMoves = [];       // list of target square names like 'e4'
-    this.lastMove = null;       // { from, to }
-    this.squares = {};          // map of 'e4' -> div element
-    this.pieces = {};           // map of 'e4' -> img element
+    this.legalMoves = []; // list of target square names like 'e4'
+    this.lastMove = null; // { from, to }
+    this.squares = {}; // map of 'e4' -> div element
+    this.pieces = {}; // map of 'e4' -> img element
     this.hintArrow = null;
-    this.annotations = [];    // [{ type: 'arrow'|'square', from, to?, color }]
+    this.annotations = []; // [{ type: 'arrow'|'square', from, to?, color }]
     this._rightClickFrom = null;
     this._rightClickColor = 'orange';
-    this.onSquareClick = null;  // callback(square)
+    this.onSquareClick = null; // callback(square)
     this.onPieceDragStart = null;
     this.onPieceDrop = null;
 
@@ -231,7 +231,7 @@ export class BoardView {
       setTimeout(() => {
         // Animation done - restore CSS-driven transform and update DOM
         pieceEl.style.transition = 'none';
-        pieceEl.style.transform = '';  // reverts to CSS class (rotate(180deg) if flipped)
+        pieceEl.style.transform = ''; // reverts to CSS class (rotate(180deg) if flipped)
         pieceEl.style.zIndex = '';
 
         // Move piece from source to target square in DOM
@@ -264,7 +264,7 @@ export class BoardView {
 
   showLegalMoves(moves) {
     this.clearLegalMoves();
-    this.legalMoves = moves.map(m => m.to);
+    this.legalMoves = moves.map((m) => m.to);
     for (const m of moves) {
       this.squares[m.to].classList.add('legal-move');
       if (m.captured) {
@@ -358,7 +358,7 @@ export class BoardView {
 
   _toggleAnnotation(type, from, to, color) {
     const idx = this.annotations.findIndex(
-      a => a.type === type && a.from === from && a.to === to && a.color === color
+      (a) => a.type === type && a.from === from && a.to === to && a.color === color
     );
     if (idx !== -1) {
       this.annotations.splice(idx, 1);
@@ -412,14 +412,16 @@ export class BoardView {
 
     // 7 vertices: shaft left side, neck flare, tip, neck flare, shaft right side
     const points = [
-      [f.x + px * shaftWidth, f.y + py * shaftWidth],     // shaft start left
-      [neckX + px * shaftWidth, neckY + py * shaftWidth],  // shaft end left
-      [neckX + px * headWidth, neckY + py * headWidth],    // head flare left
-      [t.x, t.y],                                          // tip
-      [neckX - px * headWidth, neckY - py * headWidth],    // head flare right
-      [neckX - px * shaftWidth, neckY - py * shaftWidth],  // shaft end right
-      [f.x - px * shaftWidth, f.y - py * shaftWidth],      // shaft start right
-    ].map(([x, y]) => `${x},${y}`).join(' ');
+      [f.x + px * shaftWidth, f.y + py * shaftWidth], // shaft start left
+      [neckX + px * shaftWidth, neckY + py * shaftWidth], // shaft end left
+      [neckX + px * headWidth, neckY + py * headWidth], // head flare left
+      [t.x, t.y], // tip
+      [neckX - px * headWidth, neckY - py * headWidth], // head flare right
+      [neckX - px * shaftWidth, neckY - py * shaftWidth], // shaft end right
+      [f.x - px * shaftWidth, f.y - py * shaftWidth], // shaft start right
+    ]
+      .map(([x, y]) => `${x},${y}`)
+      .join(' ');
 
     const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
     polygon.setAttribute('points', points);
@@ -503,8 +505,8 @@ export class BoardView {
   _positionGhost(clientX, clientY, size) {
     if (!this._dragGhost) return;
     const s = size || parseInt(this._dragGhost.style.width);
-    this._dragGhost.style.left = (clientX - s / 2) + 'px';
-    this._dragGhost.style.top = (clientY - s / 2) + 'px';
+    this._dragGhost.style.left = clientX - s / 2 + 'px';
+    this._dragGhost.style.top = clientY - s / 2 + 'px';
   }
 
   _onMouseMove(e) {
@@ -512,7 +514,8 @@ export class BoardView {
     if (this._pendingDrag && !this._dragging) {
       const dx = e.clientX - this._pendingDrag.startX;
       const dy = e.clientY - this._pendingDrag.startY;
-      if (dx * dx + dy * dy > 9) { // 3px threshold
+      if (dx * dx + dy * dy > 9) {
+        // 3px threshold
         this._startDrag(e, this._pendingDrag.square, this._pendingDrag.pieceEl);
         this._pendingDrag = null;
       }

@@ -1,3 +1,5 @@
+import { parseInfoLine, stockfishWorkerUrl } from './uci.js';
+
 /**
  * Pool of Stockfish Web Workers for parallel game analysis.
  * Each worker independently analyzes positions, enabling ~Nx speedup.
@@ -17,10 +19,7 @@ export class AnalysisPool {
    */
   async analyze(fens, movetime, onProgress) {
     this._cancelled = false;
-    const workerCount = Math.min(
-      fens.length,
-      Math.max(2, navigator.hardwareConcurrency || 4)
-    );
+    const workerCount = Math.min(fens.length, Math.max(2, navigator.hardwareConcurrency || 4));
 
     // Initialize workers in parallel
     await this._initWorkers(workerCount);
@@ -79,19 +78,21 @@ export class AnalysisPool {
     this._cancelled = true;
     for (const w of this._workers) {
       if (w.worker) {
-        try { w.worker.postMessage('stop'); } catch (_) { /* ignore */ }
+        try {
+          w.worker.postMessage('stop');
+        } catch (_) {
+          /* ignore */
+        }
       }
     }
     this._destroyWorkers();
   }
 
   async _initWorkers(count) {
-    const base = import.meta.env.BASE_URL;
-    const wasmUrl = `${location.origin}${base}stockfish/stockfish.js`;
-
+    const url = stockfishWorkerUrl();
     const promises = [];
     for (let i = 0; i < count; i++) {
-      promises.push(this._initOneWorker(wasmUrl));
+      promises.push(this._initOneWorker(url));
     }
     this._workers = await Promise.all(promises);
   }
@@ -130,7 +131,11 @@ export class AnalysisPool {
       let best = null;
       const timeoutId = setTimeout(() => {
         w.worker.onmessage = null;
-        try { w.worker.postMessage('stop'); } catch (_) { /* ignore */ }
+        try {
+          w.worker.postMessage('stop');
+        } catch (_) {
+          /* ignore */
+        }
         resolve(best);
       }, movetime + 5000);
 
@@ -139,7 +144,7 @@ export class AnalysisPool {
         if (typeof line !== 'string') return;
 
         if (line.startsWith('info') && line.includes('score')) {
-          const info = this._parseInfo(line);
+          const info = parseInfoLine(line);
           if (info) {
             best = {
               cp: info.cp,
@@ -161,36 +166,15 @@ export class AnalysisPool {
     });
   }
 
-  _parseInfo(line) {
-    const tokens = line.split(' ');
-    if (tokens.includes('upperbound') || tokens.includes('lowerbound')) return null;
-
-    const info = {};
-    for (let i = 0; i < tokens.length; i++) {
-      if (tokens[i] === 'depth') info.depth = parseInt(tokens[i + 1], 10);
-      if (tokens[i] === 'score') {
-        if (tokens[i + 1] === 'cp') {
-          info.cp = parseInt(tokens[i + 2], 10);
-          info.mate = null;
-        } else if (tokens[i + 1] === 'mate') {
-          info.mate = parseInt(tokens[i + 2], 10);
-          info.cp = null;
-        }
-      }
-      if (tokens[i] === 'pv') {
-        info.bestMove = tokens[i + 1] || null;
-      }
-    }
-    return info.depth !== undefined ? info : null;
-  }
-
   _destroyWorkers() {
     for (const w of this._workers) {
       if (w && w.worker) {
         try {
           w.worker.postMessage('quit');
           w.worker.terminate();
-        } catch (_) { /* ignore */ }
+        } catch (_) {
+          /* ignore */
+        }
       }
     }
     this._workers = [];

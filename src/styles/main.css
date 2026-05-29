@@ -26,7 +26,8 @@
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   width: 100%;
   height: 100%;
   overflow: hidden;
@@ -38,7 +39,8 @@ html, body {
 }
 
 @media (max-width: 1000px) {
-  html, body {
+  html,
+  body {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
@@ -83,7 +85,6 @@ body::after {
   position: relative;
   z-index: 1;
 }
-
 
 #game-layout {
   display: grid;

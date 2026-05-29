@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "chess.js": "^1.0.0-beta.8",
@@ -15,7 +19,12 @@
     "stockfish": "^17.1.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.4.0",
+    "eslint-config-prettier": "^10.1.8",
     "gh-pages": "^6.1.1",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.3",
     "vite": "^6.0.0"
   }
 }

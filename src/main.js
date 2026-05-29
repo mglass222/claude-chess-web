@@ -7,6 +7,6 @@ import './styles/setup.css';
 import { GameController } from './game/GameController.js';
 
 const controller = new GameController();
-controller.init().catch(err => {
+controller.init().catch((err) => {
   console.error('Failed to initialize game:', err);
 });

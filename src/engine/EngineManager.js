@@ -1,4 +1,5 @@
 import { getDifficultyConfig } from '../config.js';
+import { parseInfoLine, stockfishWorkerUrl } from './uci.js';
 
 const ENGINE_MOVE_TIMEOUT = 15000; // 15s timeout for getMove
 
@@ -8,7 +9,7 @@ export class EngineManager {
     this.ready = false;
     this.analyzing = false;
     this.onAnalysisUpdate = null; // callback({ cp, mate, depth, bestMove, pv })
-    this.onBestMove = null;       // callback(moveUci)
+    this.onBestMove = null; // callback(moveUci)
     this._initResolve = null;
     this._initReject = null;
     this._readyCallback = null;
@@ -24,12 +25,8 @@ export class EngineManager {
       this._initReject = reject;
 
       try {
-        // The stockfish.js file from the npm package self-initializes as a worker.
-        // We create a Worker pointing to the stockfish.js file in public/stockfish/
-        // The hash tells stockfish.js it's running as a worker
-        const base = import.meta.env.BASE_URL;
-        const wasmUrl = `${location.origin}${base}stockfish/stockfish.js`;
-        this.worker = new Worker(wasmUrl);
+        // stockfish.js self-initializes as a Web Worker when loaded this way.
+        this.worker = new Worker(stockfishWorkerUrl());
 
         this.worker.onmessage = (e) => {
           this._handleMessage(e.data);
@@ -80,7 +77,7 @@ export class EngineManager {
 
     // Parse UCI info lines during analysis
     if (line.startsWith('info') && line.includes('score')) {
-      const info = this._parseInfo(line);
+      const info = parseInfoLine(line);
       if (info && this.onAnalysisUpdate) {
         this.onAnalysisUpdate(info);
       }
@@ -97,40 +94,6 @@ export class EngineManager {
         this.onBestMove = null;
       }
     }
-  }
-
-  _parseInfo(line) {
-    const tokens = line.split(' ');
-    const info = {};
-
-    // Skip aspiration window failures — scores are unreliable
-    if (tokens.includes('upperbound') || tokens.includes('lowerbound')) {
-      return null;
-    }
-
-    for (let i = 0; i < tokens.length; i++) {
-      if (tokens[i] === 'depth') {
-        info.depth = parseInt(tokens[i + 1], 10);
-      }
-      if (tokens[i] === 'score') {
-        if (tokens[i + 1] === 'cp') {
-          info.cp = parseInt(tokens[i + 2], 10);
-          info.mate = null;
-        } else if (tokens[i + 1] === 'mate') {
-          info.mate = parseInt(tokens[i + 2], 10);
-          info.cp = null;
-        }
-      }
-      if (tokens[i] === 'pv') {
-        info.pv = tokens.slice(i + 1);
-      }
-    }
-
-    if (info.pv && info.pv.length > 0) {
-      info.bestMove = info.pv[0];
-    }
-
-    return (info.depth !== undefined) ? info : null;
   }
 
   setDifficulty(difficulty, moveTimeSec = null) {
@@ -171,7 +134,7 @@ export class EngineManager {
       };
 
       // Timeout safety: resolve with null if engine doesn't respond
-      const timeout = moveTimeSec ? (moveTimeSec * 1000 + ENGINE_MOVE_TIMEOUT) : ENGINE_MOVE_TIMEOUT;
+      const timeout = moveTimeSec ? moveTimeSec * 1000 + ENGINE_MOVE_TIMEOUT : ENGINE_MOVE_TIMEOUT;
       this._moveTimeoutId = setTimeout(() => {
         if (requestId !== this._moveRequestId) return;
         console.warn('Engine move timed out');
@@ -234,47 +197,6 @@ export class EngineManager {
       this.worker.postMessage(`position fen ${fen}`);
       this.worker.postMessage(`go depth ${maxDepth}`);
     }, 50);
-  }
-
-  analyzePosition(fen, movetime) {
-    return new Promise((resolve) => {
-      if (!this.ready) {
-        resolve(null);
-        return;
-      }
-
-      this.stopAnalysis();
-
-      let best = null;
-      const timeoutId = setTimeout(() => {
-        this.onAnalysisUpdate = null;
-        this.onBestMove = null;
-        this.worker.postMessage('stop');
-        resolve(best);
-      }, movetime + 5000);
-
-      this._readyCallback = () => {
-        // Capture deepest info line
-        this.onAnalysisUpdate = (info) => {
-          best = {
-            cp: info.cp,
-            mate: info.mate,
-            depth: info.depth,
-            bestMove: info.bestMove || (info.pv && info.pv[0]) || null,
-          };
-        };
-
-        this.onBestMove = () => {
-          clearTimeout(timeoutId);
-          this.onAnalysisUpdate = null;
-          resolve(best);
-        };
-
-        this.worker.postMessage(`position fen ${fen}`);
-        this.worker.postMessage(`go movetime ${movetime}`);
-      };
-      this.worker.postMessage('isready');
-    });
   }
 
   stopAnalysis() {

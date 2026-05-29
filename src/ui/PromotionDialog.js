@@ -26,7 +26,7 @@ export class PromotionDialog {
   }
 
   // Returns a promise that resolves with the chosen piece ('q','r','b','n') or null
-  show(color, square) {
+  show(color) {
     return new Promise((resolve) => {
       this._resolve = resolve;
       this.dialog.innerHTML = '';
