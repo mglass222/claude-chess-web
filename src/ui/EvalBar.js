@@ -1,4 +1,4 @@
-import { EVAL_BAR_ANIMATION_DURATION, EVAL_BAR_MIN_DEPTH } from '../config.js';
+import { EVAL_BAR_SMOOTHING, EVAL_BAR_MIN_DEPTH } from '../config.js';
 
 export class EvalBar {
   constructor(container) {
@@ -6,16 +6,12 @@ export class EvalBar {
     this.playerColor = 'w';
     this._currentCp = 0;
     this._targetCp = 0;
-    this._startCp = 0;
     this._isMate = false;
     this._mateIn = null;
-    this._animStart = 0;
     this._animating = false;
     this._rafId = null;
     this._depthMet = false;
     this._maxDepthSeen = 0;
-    this._settleTimer = null;
-    this._pendingEval = null;
 
     this._build();
   }
@@ -71,11 +67,9 @@ export class EvalBar {
 
   update(evaluation) {
     if (!evaluation) {
-      this._clearSettle();
       // Keep the last displayed value — don't clear the label or bar
       this._depthMet = false;
       this._maxDepthSeen = 0;
-      this._pendingEval = null;
       return;
     }
 
@@ -102,44 +96,31 @@ export class EvalBar {
       return;
     }
 
-    // Once depth threshold is met, only re-animate if the change is significant
-    // or this is the first update past the threshold
+    // Once the first deep eval is shown, only re-animate if the change is
+    // significant — skip jitter between depth iterations.
     if (this._depthMet) {
       const delta = Math.abs(newCp - this._targetCp);
-      if (delta < 30) return; // Skip fluctuations between depth iterations
+      if (delta < 30) return;
     }
 
-    // Debounce: wait 400ms for the eval to settle before applying
-    this._pendingEval = { cp: newCp, mate, isMate: mate !== null && mate !== undefined };
-    this._clearSettle();
-    this._settleTimer = setTimeout(() => this._applyPending(), 400);
-  }
-
-  _applyPending() {
-    if (!this._pendingEval) return;
-    const { cp, isMate, mate } = this._pendingEval;
-    this._pendingEval = null;
+    // Apply directly. The MIN_DEPTH gate and the delta check above already
+    // remove shallow noise and jitter, so the bar can react immediately; the
+    // ease-out animation smooths the visual transition.
     this._depthMet = true;
-
-    this._isMate = isMate;
-    this._mateIn = isMate ? mate : null;
-    this._setTarget(cp);
-  }
-
-  _clearSettle() {
-    if (this._settleTimer) {
-      clearTimeout(this._settleTimer);
-      this._settleTimer = null;
-    }
+    this._isMate = mate !== null && mate !== undefined;
+    this._mateIn = this._isMate ? mate : null;
+    this._setTarget(newCp);
   }
 
   _setTarget(cp) {
-    this._startCp = this._currentCp;
     this._targetCp = cp;
-    this._animStart = performance.now();
-    this._animating = true;
-    if (!this._rafId) {
-      this._animate();
+    // Keep easing toward the latest target. If a deeper eval updates the target
+    // mid-flight, the loop simply redirects toward it — no restart, no jump.
+    if (!this._animating) {
+      this._animating = true;
+      if (!this._rafId) {
+        this._animate();
+      }
     }
   }
 
@@ -149,16 +130,22 @@ export class EvalBar {
       return;
     }
 
-    const elapsed = performance.now() - this._animStart;
-    const progress = Math.min(1, elapsed / EVAL_BAR_ANIMATION_DURATION);
-    const eased = 1 - Math.pow(1 - progress, 2); // ease-out quad
+    const diff = this._targetCp - this._currentCp;
 
-    this._currentCp = this._startCp + (this._targetCp - this._startCp) * eased;
-
-    if (progress >= 1) {
+    // Snap and stop once close enough (within 0.01 pawn) to avoid an endless
+    // asymptotic crawl.
+    if (Math.abs(diff) < 1) {
       this._currentCp = this._targetCp;
       this._animating = false;
+      this._updateBar(this._currentCp);
+      this._updateLabel();
+      this._rafId = null;
+      return;
     }
+
+    // Exponential smoothing: close a fixed fraction of the remaining distance
+    // each frame. Successive deep-eval changes blend into one continuous glide.
+    this._currentCp += diff * EVAL_BAR_SMOOTHING;
 
     this._updateBar(this._currentCp);
     this._updateLabel();
@@ -205,8 +192,6 @@ export class EvalBar {
   /** Instantly set the eval bar to a known centipawn value (no depth gating). */
   setEvalCp(cp) {
     if (cp === null || cp === undefined) return;
-    this._clearSettle();
-    this._pendingEval = null;
     this._depthMet = true;
     this._isMate = false;
     this._mateIn = null;
@@ -218,10 +203,7 @@ export class EvalBar {
       cancelAnimationFrame(this._rafId);
       this._rafId = null;
     }
-    this._clearSettle();
-    this._pendingEval = null;
     // Freeze current bar position and label — don't reset to 0
-    this._startCp = this._currentCp;
     this._targetCp = this._currentCp;
     this._animating = false;
     this._depthMet = false;
@@ -233,7 +215,6 @@ export class EvalBar {
       cancelAnimationFrame(this._rafId);
       this._rafId = null;
     }
-    this._clearSettle();
     this._animating = false;
   }
 }

@@ -87,7 +87,10 @@ export const DEFAULTS = {
 };
 
 export const ANIMATION_DURATION = 300; // ms
-export const EVAL_BAR_ANIMATION_DURATION = 500; // ms
+// Per-frame fraction the bar closes toward the latest target. Lower = smoother
+// and slower; higher = snappier. Continuous easing toward the most recent deep
+// eval blends successive eval changes into one glide instead of discrete jumps.
+export const EVAL_BAR_SMOOTHING = 0.12;
 export const EVAL_BAR_MIN_DEPTH = 20;
 export const ANALYSIS_DEPTH_MIN = 16;
 export const ANALYSIS_DEPTH_MAX = 22;

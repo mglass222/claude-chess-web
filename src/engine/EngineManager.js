@@ -149,8 +149,10 @@ export class EngineManager {
 
       this.cancelPendingMove();
 
-      // Stop any ongoing analysis
+      // Stop any ongoing analysis. Detach the analysis callback so this move
+      // search's own info lines never reach the eval bar.
       this.stopAnalysis();
+      this.onAnalysisUpdate = null;
       const requestId = ++this._moveRequestId;
       this._pendingMoveResolve = resolve;
 

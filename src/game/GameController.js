@@ -644,8 +644,8 @@ export class GameController {
       this._leftPanelButtonsContainer.style.display = '';
     };
 
-    // Engine analysis callback
-    this.engine.onAnalysisUpdate = (info) => this._handleAnalysisUpdate(info);
+    // The analysis callback is (re)installed per-position in _startAnalysis,
+    // bound to the exact FEN being analyzed — see _handleAnalysisUpdate.
 
     // Keyboard navigation
     document.addEventListener('keydown', this._boundKeyboard);
@@ -1143,16 +1143,26 @@ export class GameController {
     this.state.evaluation = null;
     this.state.bestMove = null;
     this.evalBar.update(null); // Reset depth gate for new position
-    this.engine.onAnalysisUpdate = (info) => this._handleAnalysisUpdate(info);
-    this.engine.startAnalysis(this.state.fen, this.state.analysisDepth);
+    // Capture the exact position being analyzed. Info lines are only applied
+    // while this is still the displayed position, so stale lines from a prior
+    // search and lines emitted by the AI's own move search can't drive the bar.
+    const analysisFen = this.state.fen;
+    this.engine.onAnalysisUpdate = (info) => this._handleAnalysisUpdate(info, analysisFen);
+    this.engine.startAnalysis(analysisFen, this.state.analysisDepth);
   }
 
-  _handleAnalysisUpdate(info) {
+  _handleAnalysisUpdate(info, analysisFen) {
     if (this.state.phase !== 'playing' && this.state.phase !== 'over') return;
+
+    // Only apply scores for the position currently on the board. A line for any
+    // other position (a stale flush from the previous search, or the AI's own
+    // move-search output) must be ignored — normalizing it against the wrong
+    // side-to-move would flip the bar's sign.
+    if (analysisFen !== this.state.fen) return;
 
     // Stockfish reports scores from the side-to-move's perspective.
     // Normalize to white's perspective for the eval bar.
-    const turnFromFen = this.state.fen.split(' ')[1];
+    const turnFromFen = analysisFen.split(' ')[1];
     const flip = turnFromFen === 'b' ? -1 : 1;
 
     // Store evaluation (normalized to white's perspective)
