@@ -7,6 +7,28 @@ Update this file whenever the program changes.
 
 ## 2026-05-28
 
+### UX — engine-failure notice and save/load feedback (Tier 4)
+Two silent states now give the player feedback:
+
+- **Engine-load failure.** If Stockfish fails to initialize, the app showed
+  nothing — you'd get an opponent that never moves. Now a red banner appears on
+  the board ("Chess engine failed to load — refresh the page to try again").
+  Also fixed a latent bug it exposed: as Black, `_makeAIMove` would retry every
+  500 ms forever when the engine never loaded — it now bails on `_engineReady`.
+  *(src/game/GameController.js, src/styles/main.css)*
+- **Save / Load.** These only logged to the console. Now the button briefly
+  flashes status ("Saved!", "Loaded!", "No saved game", "Load failed"), reusing
+  the existing Copy-PGN/FEN flash (extracted as `_flashButton`).
+  *(src/game/GameController.js)*
+
+Board keyboard accessibility (also flagged in the audit) was intentionally
+skipped as YAGNI for a personal project with no known keyboard/AT users.
+
+### Chore — bump GitHub Actions to Node 24 majors
+checkout v4->v6, setup-node v4->v6, upload-pages-artifact v3->v5,
+deploy-pages v4->v5, clearing the Node 20 runtime deprecation warning.
+*(.github/workflows/deploy.yml)*
+
 ### Refactor — split the GameController god object (Tier 3)
 Pulled three self-contained concerns out of the 1,556-line `GameController`,
 which is now **1,264 lines**. Pure structural refactor — no behavior change;

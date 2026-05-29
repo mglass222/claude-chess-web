@@ -38,6 +38,7 @@ export class GameController {
     this.state = new GameState();
     this.history = new MoveHistory();
     this.engine = new EngineManager();
+    this._engineReady = false;
     this.sound = new SoundManager();
 
     // Settings (persisted to localStorage)
@@ -151,9 +152,11 @@ export class GameController {
     // Initialize engine
     try {
       await this.engine.init();
+      this._engineReady = true;
       console.log('Stockfish engine ready');
     } catch (e) {
       console.warn('Engine failed to initialize:', e);
+      this._showEngineError();
     }
 
     // Auto-start game with saved/default settings
@@ -203,6 +206,8 @@ export class GameController {
         btn.classList.add('panel-btn-danger');
         btn.style.display = 'none';
       }
+      if (id === 'save') this._saveBtnEl = btn;
+      if (id === 'load') this._loadBtnEl = btn;
     }
 
     // PGN button
@@ -353,23 +358,31 @@ export class GameController {
   }
 
   _copyToClipboard(text, btn) {
-    const original = btn.textContent;
     navigator.clipboard
       .writeText(text)
-      .then(() => {
-        btn.textContent = 'Copied!';
-        btn.classList.add('copied');
-        this._setTimeout(() => {
-          btn.textContent = original;
-          btn.classList.remove('copied');
-        }, 1500);
-      })
-      .catch(() => {
-        btn.textContent = 'Failed!';
-        this._setTimeout(() => {
-          btn.textContent = original;
-        }, 1500);
-      });
+      .then(() => this._flashButton(btn, 'Copied!'))
+      .catch(() => this._flashButton(btn, 'Failed!'));
+  }
+
+  // Briefly replace a button's label with a status message, then restore it.
+  _flashButton(btn, message) {
+    const original = btn.textContent;
+    btn.textContent = message;
+    btn.classList.add('copied');
+    this._setTimeout(() => {
+      btn.textContent = original;
+      btn.classList.remove('copied');
+    }, 1500);
+  }
+
+  // Show a persistent notice on the board when Stockfish fails to load.
+  _showEngineError() {
+    if (this._engineErrorEl) return;
+    const banner = document.createElement('div');
+    banner.className = 'engine-error-banner';
+    banner.textContent = 'Chess engine failed to load — refresh the page to try again.';
+    document.getElementById('board-area').appendChild(banner);
+    this._engineErrorEl = banner;
   }
 
   _wireCallbacks() {
@@ -680,6 +693,7 @@ export class GameController {
     if (this.state.phase !== 'playing') return;
     if (this.state.isPlayerTurn) return;
     if (this.boardView.isAnimating) return;
+    if (!this._engineReady) return; // engine never loaded — don't spin retrying
     const sessionId = this._gameSessionId;
 
     // Stop analysis while getting AI move
@@ -1218,13 +1232,13 @@ export class GameController {
   _saveGame() {
     const data = this.state.serialize(this.history);
     localStorage.setItem('claude-chess-save', JSON.stringify(data));
-    console.log('Game saved');
+    this._flashButton(this._saveBtnEl, 'Saved!');
   }
 
   _loadGame() {
     const raw = localStorage.getItem('claude-chess-save');
     if (!raw) {
-      console.log('No saved game found');
+      this._flashButton(this._loadBtnEl, 'No saved game');
       return;
     }
     try {
@@ -1257,8 +1271,10 @@ export class GameController {
           this._setTimeout(() => this._makeAIMove(), 300);
         }
       }
+      this._flashButton(this._loadBtnEl, 'Loaded!');
     } catch (e) {
       console.error('Failed to load game:', e);
+      this._flashButton(this._loadBtnEl, 'Load failed');
     }
   }
 }

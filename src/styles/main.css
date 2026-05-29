@@ -142,6 +142,21 @@ body::after {
   position: relative;
 }
 
+.engine-error-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  padding: 10px 14px;
+  background: rgba(180, 45, 45, 0.95);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+  border-radius: 6px 6px 0 0;
+}
+
 #below-board {
   display: flex;
   align-items: center;
