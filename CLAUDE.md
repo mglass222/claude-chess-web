@@ -12,11 +12,12 @@ existing one (this is how `GameController` ballooned past 1,300 lines).
 
 - **`src/game/GameController.js`** — the coordinator. Wires UI, engine, and game
   state together and owns top-level flow. It should _delegate_, not _contain_,
-  domain logic. It is currently oversized and slated for decomposition into:
-  - `AnalysisController` — live eval + post-game analysis-pool orchestration
-  - `MoveExecutor` — applying / validating a move and its side effects
-  - `HistoryNavigator` — back / forward / jump through move history
-  - panel view-builders — DOM construction for the side panels
+  domain logic. View building and history navigation were extracted in A1 Tiers
+  1–2; it remains oversized (~990 lines) until Tier 3 lands:
+  - `HistoryNavigator` — back / forward / jump through move history — **extracted**
+  - panel view modules — `LeftPanel`, `PlayerInfoView`, `boardUtils` — **extracted**
+  - `AnalysisController` — live eval + post-game analysis orchestration — _planned (Tier 3)_
+  - `MoveExecutor` — applying / validating a move + its side effects — _planned (Tier 3)_
 
   Do **not** add new responsibilities here — put them in the relevant module above
   (creating it if it doesn't exist yet).
@@ -26,9 +27,10 @@ existing one (this is how `GameController` ballooned past 1,300 lines).
   (protocol parsing + worker URL). The engine is **single-threaded** (no
   SharedArrayBuffer / pthreads) — do not reintroduce COOP/COEP assumptions.
 - **`src/ui/`** — presentational components (BoardView, MoveList, EvalBar,
-  AnalysisGraph, dialogs, clock, sound). Each renders and emits events; none drives
-  game flow directly.
-- **`src/game/`** — non-UI game model: `GameState`, `MoveHistory`, settings, PGN.
+  AnalysisGraph, LeftPanel, PlayerInfoView, dialogs, clock, sound). Each renders and
+  emits events; none drives game flow directly.
+- **`src/game/`** — non-UI game model: `GameState`, `MoveHistory`, `HistoryNavigator`,
+  `boardUtils`, settings, PGN.
 
 ## File-size budget
 

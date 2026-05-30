@@ -33,10 +33,11 @@ export default [
     },
   },
 
-  // Tracked size debt: these files predate the budgets above and are slated for
-  // decomposition (see CLAUDE.md → Architecture). The override keeps CI green while
-  // still holding every *other* file to the limit. Remove an entry once its file is
-  // split; do not add new ones without discussion.
+  // Tracked size debt: these files exceed the budgets above. GameController has had
+  // its view building and history navigation extracted (A1 Tiers 1-2); clearing the
+  // budget needs Tier 3 — extracting AnalysisController + MoveExecutor. The override
+  // keeps CI green while still holding every *other* file to the limit. Remove an
+  // entry once its file is split; do not add new ones without discussion.
   {
     files: ['src/game/GameController.js', 'src/ui/BoardView.js'],
     rules: {
