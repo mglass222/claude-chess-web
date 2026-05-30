@@ -1,4 +1,3 @@
-import { Chess } from 'chess.js';
 import { GameState } from './GameState.js';
 import { MoveHistory } from './MoveHistory.js';
 import { generatePgn } from './pgn.js';
@@ -14,23 +13,11 @@ import { SettingsDialog } from '../ui/SettingsDialog.js';
 import { NewGameSetup } from '../ui/NewGameSetup.js';
 import { SoundManager } from '../ui/SoundManager.js';
 import { ChessClock } from '../ui/ChessClock.js';
-import { MOVE_TIME_OPTIONS, evalToCp, getDifficultyLabel, ANALYSIS_DEPTH_MAX } from '../config.js';
-
-/**
- * Return the algebraic square (e.g. 'e1') of the given color's king, or null.
- * `board` is a chess.js board() array (board[0] is rank 8, board[7] is rank 1).
- */
-function findKingSquare(board, color) {
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      const p = board[r][c];
-      if (p && p.type === 'k' && p.color === color) {
-        return String.fromCharCode(97 + c) + (8 - r);
-      }
-    }
-  }
-  return null;
-}
+import { evalToCp, ANALYSIS_DEPTH_MAX } from '../config.js';
+import { pieceAt, checkHighlightSquare } from './boardUtils.js';
+import { HistoryNavigator } from './HistoryNavigator.js';
+import { PlayerInfoView } from '../ui/PlayerInfoView.js';
+import { LeftPanel } from '../ui/LeftPanel.js';
 
 export class GameController {
   constructor() {
@@ -43,10 +30,6 @@ export class GameController {
     // Settings (persisted to localStorage)
     this.settings = loadSettings();
 
-    // Cache of derived view data (board array + check square) keyed by position
-    // FEN, so navigating history doesn't construct a fresh Chess() on every step.
-    this._positionCache = new Map();
-
     // UI components (created in init)
     this.boardView = null;
     this.evalBar = null;
@@ -56,19 +39,6 @@ export class GameController {
     this.settingsDialog = null;
     this.newGameSetup = null;
     this.chessClock = null;
-
-    // Left panel buttons
-    this._leftPanelEl = null;
-
-    // Depth slider
-    this._depthSliderEl = null;
-    this._depthValueEl = null;
-
-    // Hint button
-    this._hintBtnEl = null;
-
-    // Take Back button
-    this._takeBackBtnEl = null;
 
     // Replay controls
     this._replayEl = null;
@@ -80,7 +50,7 @@ export class GameController {
     this._cancelAnalysis = false;
 
     // Bound handlers for cleanup
-    this._boundKeyboard = (e) => this._handleKeyboard(e);
+    this._boundKeyboard = (e) => this.historyNavigator.handleKey(e);
 
     // Tracked timeouts for cleanup
     this._pendingTimeouts = [];
@@ -107,8 +77,10 @@ export class GameController {
     // Create a row wrapper for eval bar + board
     const boardColumn = document.getElementById('board-column');
 
-    // Opponent info (above board)
-    this._opponentInfo = this._buildPlayerInfo('opponent');
+    // Player/opponent info banners (placement stays here; the view builds them)
+    this.playerInfoView = new PlayerInfoView();
+    this._opponentInfo = this.playerInfoView.opponentEl;
+    this._playerInfo = this.playerInfoView.playerEl;
     boardColumn.insertBefore(this._opponentInfo, boardArea);
 
     const boardRow = document.createElement('div');
@@ -120,7 +92,6 @@ export class GameController {
     boardRow.insertBefore(this.evalBar.el, boardArea);
 
     // Player info (below board)
-    this._playerInfo = this._buildPlayerInfo('player');
     boardColumn.insertBefore(this._playerInfo, document.getElementById('below-board'));
 
     // Inline game-over result banner (replaces the old modal overlay), shown
@@ -135,11 +106,30 @@ export class GameController {
     this.chessClock.onTimeOut = (color) => this._handleTimeOut(color);
     this.chessClock.onLowTimeTick = () => this.sound.playLowTimeWarning();
 
-    // Settings (inline in left panel, must be created before _buildLeftPanel)
+    // Settings dialog + new-game setup are owned by the controller (it wires their
+    // callbacks); the left panel hosts their elements.
     this.settingsDialog = new SettingsDialog();
+    this.newGameSetup = new NewGameSetup(this.settings.pieceSet);
+    this.newGameSetup.onStart = (opts) => this._startNewGame(opts);
+    this.newGameSetup.onCancel = () => this._hideNewGameSetup();
 
-    // Left panel buttons
-    this._buildLeftPanel(leftPanel);
+    this.leftPanel = new LeftPanel(leftPanel, {
+      actions: {
+        onNewGame: () => this._newGame(),
+        onTakeBack: () => this._takeBack(),
+        onSave: () => this._saveGame(),
+        onLoad: () => this._loadGame(),
+        onToggleHint: () => this._toggleHint(),
+        onResign: () => this._resign(),
+        onOpenSettings: () => this._openSettings(),
+        onCopyPgn: () => generatePgn(this.state, this.history),
+        onCopyFen: () => this._getCurrentFen(),
+        onToggleAnalyze: () => this._handleAnalyzeClick(),
+        onStartAnalysis: (ms) => this._runPostGameAnalysis(ms),
+      },
+      newGameSetupEl: this.newGameSetup.el,
+      settingsDialogEl: this.settingsDialog.el,
+    });
 
     this.moveList = new MoveList(rightPanel);
 
@@ -149,7 +139,22 @@ export class GameController {
     this.promotionDialog = new PromotionDialog(boardArea);
     this.promotionDialog.pieceSet = this.settings.pieceSet;
 
-    // Settings button (added to left panel in _buildLeftPanel)
+    // History/view navigation (back/forward/jump, keyboard, per-ply position cache)
+    this.historyNavigator = new HistoryNavigator({
+      history: this.history,
+      boardView: this.boardView,
+      evalBar: this.evalBar,
+      analysisGraph: this.analysisGraph,
+      moveList: this.moveList,
+      state: this.state,
+      onReturnToLive: () => {
+        this.boardView.updatePosition(this.state.board);
+        this._updateCheckHighlight();
+      },
+      onPositionShown: () => {
+        if (this.state.showingBestMove) this._showBestMoveForCurrentPosition();
+      },
+    });
 
     // Build below-board area (hint + replay)
     this._buildBelowBoard(belowBoard);
@@ -174,142 +179,6 @@ export class GameController {
     this._startGame();
   }
 
-  _buildLeftPanel(container) {
-    this._leftPanelEl = document.createElement('div');
-    this._leftPanelEl.className = 'left-panel-buttons';
-    this._leftPanelEl.style.display = 'none';
-
-    const buttons = [
-      { id: 'new-game', label: 'New Game', action: () => this._newGame() },
-      { id: 'take-back', label: 'Take Back', action: () => this._takeBack() },
-      { id: 'save', label: 'Save', action: () => this._saveGame() },
-      { id: 'load', label: 'Load', action: () => this._loadGame() },
-      { id: 'hint', label: 'Hint', action: () => this._toggleHint() },
-      { id: 'resign', label: 'Resign', action: () => this._resign() },
-    ];
-
-    // Container for normal buttons (hidden when new game setup is shown)
-    this._leftPanelButtonsContainer = document.createElement('div');
-    this._leftPanelButtonsContainer.className = 'left-panel-buttons-inner';
-
-    const secondaryIds = new Set(['settings', 'save', 'load']);
-    for (const { id, label, action } of buttons) {
-      const btn = document.createElement('button');
-      btn.className = 'panel-btn';
-      if (secondaryIds.has(id)) btn.classList.add('panel-btn-secondary');
-      btn.id = `btn-${id}`;
-      btn.textContent = label;
-      btn.addEventListener('click', action);
-      this._leftPanelButtonsContainer.appendChild(btn);
-      if (id === 'hint') {
-        this._hintBtnEl = btn;
-        btn.style.display = 'none';
-      }
-      if (id === 'take-back') {
-        this._takeBackBtnEl = btn;
-        btn.style.display = 'none';
-      }
-      if (id === 'resign') {
-        this._resignBtnEl = btn;
-        btn.classList.add('panel-btn-danger');
-        btn.style.display = 'none';
-      }
-      if (id === 'save') this._saveBtnEl = btn;
-      if (id === 'load') this._loadBtnEl = btn;
-    }
-
-    // PGN button
-    this._pgnCopyBtn = document.createElement('button');
-    this._pgnCopyBtn.className = 'panel-btn pgn-btn';
-    this._pgnCopyBtn.textContent = 'Copy PGN';
-    this._pgnCopyBtn.addEventListener('click', () =>
-      this._copyToClipboard(generatePgn(this.state, this.history), this._pgnCopyBtn)
-    );
-    this._leftPanelButtonsContainer.appendChild(this._pgnCopyBtn);
-
-    // FEN button below PGN
-    this._fenCopyBtn = document.createElement('button');
-    this._fenCopyBtn.className = 'panel-btn fen-btn';
-    this._fenCopyBtn.textContent = 'Copy FEN';
-    this._fenCopyBtn.addEventListener('click', () =>
-      this._copyToClipboard(this._getCurrentFen(), this._fenCopyBtn)
-    );
-    this._leftPanelButtonsContainer.appendChild(this._fenCopyBtn);
-
-    // Settings button (below Copy FEN)
-    const settingsBtn = document.createElement('button');
-    settingsBtn.className = 'panel-btn panel-btn-secondary settings-btn';
-    settingsBtn.id = 'btn-settings';
-    settingsBtn.textContent = 'Settings';
-    settingsBtn.addEventListener('click', () => this._openSettings());
-    this._leftPanelButtonsContainer.appendChild(settingsBtn);
-
-    // Analyze Game button (shown only after game over)
-    this._analyzeBtnEl = document.createElement('button');
-    this._analyzeBtnEl.className = 'panel-btn';
-    this._analyzeBtnEl.id = 'btn-analyze';
-    this._analyzeBtnEl.textContent = 'Analyze Game';
-    this._analyzeBtnEl.style.display = 'none';
-    this._analyzeBtnEl.addEventListener('click', () => this._handleAnalyzeClick());
-    this._leftPanelButtonsContainer.appendChild(this._analyzeBtnEl);
-
-    // Inline time picker for analysis (hidden by default, shown inside left panel)
-    this._inlineTimePicker = document.createElement('div');
-    this._inlineTimePicker.className = 'analysis-time-picker';
-    this._inlineTimePicker.style.display = 'none';
-
-    const tpLabel = document.createElement('div');
-    tpLabel.className = 'depth-label';
-    tpLabel.textContent = 'Seconds per move:';
-
-    const tpOptions = document.createElement('div');
-    tpOptions.className = 'analysis-time-options';
-
-    this._inlineSelectedTime = 3000;
-    this._inlineTimeBtns = [];
-    for (const { label, ms } of [
-      { label: '1s', ms: 1000 },
-      { label: '3s', ms: 3000 },
-      { label: '5s', ms: 5000 },
-      { label: '10s', ms: 10000 },
-    ]) {
-      const btn = document.createElement('button');
-      btn.className = 'analysis-time-btn';
-      if (ms === 3000) btn.classList.add('selected');
-      btn.textContent = label;
-      btn.addEventListener('click', () => {
-        this._inlineSelectedTime = ms;
-        for (const b of this._inlineTimeBtns) b.classList.remove('selected');
-        btn.classList.add('selected');
-      });
-      tpOptions.appendChild(btn);
-      this._inlineTimeBtns.push(btn);
-    }
-
-    const startBtn = document.createElement('button');
-    startBtn.className = 'panel-btn';
-    startBtn.textContent = 'Start Analysis';
-    startBtn.addEventListener('click', () => {
-      this._inlineTimePicker.style.display = 'none';
-      this._runPostGameAnalysis(this._inlineSelectedTime);
-    });
-
-    this._inlineTimePicker.appendChild(tpLabel);
-    this._inlineTimePicker.appendChild(tpOptions);
-    this._inlineTimePicker.appendChild(startBtn);
-    this._leftPanelButtonsContainer.appendChild(this._inlineTimePicker);
-    this._leftPanelEl.appendChild(this._leftPanelButtonsContainer);
-
-    // Inline new game setup (replaces popup overlay)
-    this.newGameSetup = new NewGameSetup(this.settings.pieceSet);
-    this.newGameSetup.onStart = (opts) => this._startNewGame(opts);
-    this.newGameSetup.onCancel = () => this._hideNewGameSetup();
-    this._leftPanelEl.appendChild(this.newGameSetup.el);
-    this._leftPanelEl.appendChild(this.settingsDialog.el);
-
-    container.appendChild(this._leftPanelEl);
-  }
-
   _startNewGame({ color, difficulty, timeControl, moveTime }) {
     this.state.playerColor = color;
     this.state.difficulty = difficulty;
@@ -325,14 +194,14 @@ export class GameController {
   }
 
   _showNewGameSetup() {
-    this._leftPanelButtonsContainer.style.display = 'none';
+    this.leftPanel.setButtonsVisible(false);
     this.newGameSetup.show(this.settings);
     document.getElementById('board-column').classList.add('board-inactive');
   }
 
   _hideNewGameSetup() {
     this.newGameSetup.hide();
-    this._leftPanelButtonsContainer.style.display = 'flex';
+    this.leftPanel.setButtonsVisible(true);
     document.getElementById('board-column').classList.remove('board-inactive');
   }
 
@@ -345,12 +214,12 @@ export class GameController {
     const prevBtn = document.createElement('button');
     prevBtn.className = 'replay-btn';
     prevBtn.textContent = '\u25C0'; // left arrow
-    prevBtn.addEventListener('click', () => this._navigateHistory('back'));
+    prevBtn.addEventListener('click', () => this.historyNavigator.back());
 
     const nextBtn = document.createElement('button');
     nextBtn.className = 'replay-btn';
     nextBtn.textContent = '\u25B6'; // right arrow
-    nextBtn.addEventListener('click', () => this._navigateHistory('forward'));
+    nextBtn.addEventListener('click', () => this.historyNavigator.forward());
 
     this._replayEl.appendChild(prevBtn);
     this._replayEl.appendChild(nextBtn);
@@ -363,24 +232,6 @@ export class GameController {
       return this.history.moves[viewIdx].fen || this.state.fen;
     }
     return this.state.fen;
-  }
-
-  _copyToClipboard(text, btn) {
-    navigator.clipboard
-      .writeText(text)
-      .then(() => this._flashButton(btn, 'Copied!'))
-      .catch(() => this._flashButton(btn, 'Failed!'));
-  }
-
-  // Briefly replace a button's label with a status message, then restore it.
-  _flashButton(btn, message) {
-    const original = btn.textContent;
-    btn.textContent = message;
-    btn.classList.add('copied');
-    this._setTimeout(() => {
-      btn.textContent = original;
-      btn.classList.remove('copied');
-    }, 1500);
   }
 
   // Show a persistent notice on the board when Stockfish fails to load.
@@ -399,11 +250,11 @@ export class GameController {
     this.boardView.onPieceDragStart = (square) => this._handleDragStart(square);
 
     // Move list clicks
-    this.moveList.onMoveClick = (idx) => this._goToMoveIndex(idx);
+    this.moveList.onMoveClick = (idx) => this.historyNavigator.goToIndex(idx);
 
     // Analysis graph
     this.analysisGraph.onMoveClick = (idx) => {
-      this._goToMoveIndex(idx);
+      this.historyNavigator.goToIndex(idx);
       this.analysisGraph.setHighlight(idx);
     };
     this.analysisGraph.onCancel = () => {
@@ -439,7 +290,7 @@ export class GameController {
       this.settingsDialog.updateSettings(this.settings);
     };
     this.settingsDialog.onClose = () => {
-      this._leftPanelButtonsContainer.style.display = '';
+      this.leftPanel.setButtonsVisible(true);
     };
 
     // The analysis callback is (re)installed per-position in _startAnalysis,
@@ -457,14 +308,13 @@ export class GameController {
 
   _startGame() {
     this._resultBanner.style.display = 'none';
-    this._analyzeBtnEl.style.display = 'none';
-    this._analyzeBtnEl.classList.remove('best-move-btn');
-    this._inlineTimePicker.style.display = 'none';
+    this.leftPanel.hideAnalyzeButton();
+    this.leftPanel.hideTimePicker();
     this.analysisGraph.hide();
     this.state.showingBestMove = false;
     this.state.resetGame();
     this.state.startGame();
-    this._positionCache.clear();
+    this.historyNavigator.clearCache();
     this.history.clear();
     this.history.setInitialFen(this.state.fen);
 
@@ -475,11 +325,9 @@ export class GameController {
     this.boardView.clearHintArrow();
 
     // Show UI elements
-    this._leftPanelEl.style.display = 'flex';
-    this._hintBtnEl.style.display = 'block';
-    this._takeBackBtnEl.style.display = 'block';
-    this._takeBackBtnEl.disabled = true;
-    this._resignBtnEl.style.display = 'block';
+    this.leftPanel.setPanelVisible(true);
+    this.leftPanel.setInGameControlsVisible(true);
+    this.leftPanel.setTakeBackEnabled(false);
     this._replayEl.style.display = 'none';
 
     // Reset eval bar
@@ -493,7 +341,7 @@ export class GameController {
     this.engine.setDifficulty(this.state.difficulty, this.state.moveTime);
 
     // Update player info
-    this._updatePlayerInfos();
+    this.playerInfoView.update(this.state);
 
     // Initialize chess clocks
     const timeMinutes = this.state.timeControl || this.settings.timeControl || 0;
@@ -521,15 +369,14 @@ export class GameController {
     this._cancelTransientGameWork();
     this.chessClock.stop();
     this._resultBanner.style.display = 'none';
-    this._analyzeBtnEl.style.display = 'none';
-    this._analyzeBtnEl.classList.remove('best-move-btn');
-    this._inlineTimePicker.style.display = 'none';
+    this.leftPanel.hideAnalyzeButton();
+    this.leftPanel.hideTimePicker();
     this.analysisGraph.hide();
     this.state.showingBestMove = false;
     this.state.resetGame();
     this.state.playerColor = this.state.lastPlayerColor;
     this.state.difficulty = this.state.lastDifficulty;
-    this._positionCache.clear();
+    this.historyNavigator.clearCache();
     this.history.clear();
     this.history.setInitialFen(this.state.fen);
 
@@ -541,11 +388,9 @@ export class GameController {
     this.evalBar.reset();
     this.evalBar.setPlayerColor(this.state.playerColor);
     this.moveList.clear();
-    this._hintBtnEl.style.display = 'block';
-    this._hintBtnEl.textContent = 'Hint';
-    this._takeBackBtnEl.style.display = 'block';
-    this._resignBtnEl.style.display = 'block';
-    this._takeBackBtnEl.disabled = true;
+    this.leftPanel.setInGameControlsVisible(true);
+    this.leftPanel.setHintLabel('Hint');
+    this.leftPanel.setTakeBackEnabled(false);
     this._replayEl.style.display = 'none';
 
     this.engine.setDifficulty(this.state.difficulty, this.state.moveTime);
@@ -664,13 +509,13 @@ export class GameController {
     this.moveList.render(this.history);
 
     // Enable take back
-    this._takeBackBtnEl.disabled = false;
+    this.leftPanel.setTakeBackEnabled(true);
 
     // Reset hint
     this.state.showingHint = false;
     this.state.bestMove = null;
     this.boardView.clearHintArrow();
-    this._hintBtnEl.textContent = 'Hint';
+    this.leftPanel.setHintLabel('Hint');
 
     // Check game over
     if (this.state.checkGameOver()) {
@@ -776,22 +621,13 @@ export class GameController {
     this.engine.cancelPendingMove();
     this.engine.stopAnalysis();
     this.chessClock.stop();
-    this._hintBtnEl.style.display = 'none';
-    this._takeBackBtnEl.style.display = 'none';
-    this._resignBtnEl.style.display = 'none';
+    this.leftPanel.setInGameControlsVisible(false);
     this._replayEl.style.display = 'none';
 
     // Show analyze button in left panel
-    this._analyzeBtnEl.style.display = 'block';
     this.state.showingBestMove = false;
-    if (this.state.analysisResults) {
-      this._analyzeBtnEl.textContent = 'Best Move';
-      this._analyzeBtnEl.classList.add('best-move-btn');
-    } else {
-      this._analyzeBtnEl.textContent = 'Analyze Game';
-      this._analyzeBtnEl.classList.remove('best-move-btn');
-    }
-    this._inlineTimePicker.style.display = 'none';
+    this.leftPanel.showAnalyzeButton(!!this.state.analysisResults);
+    this.leftPanel.hideTimePicker();
 
     this._showResult(reason);
   }
@@ -819,19 +655,8 @@ export class GameController {
   _handleAnalyzeClick() {
     if (this.state.analysisResults) {
       this._toggleBestMoveArrow();
-      return;
     } else {
-      // Toggle time picker visibility
-      const isVisible = this._inlineTimePicker.style.display !== 'none';
-      if (isVisible) {
-        this._inlineTimePicker.style.display = 'none';
-      } else {
-        this._inlineSelectedTime = 3000;
-        for (const btn of this._inlineTimeBtns) {
-          btn.classList.toggle('selected', btn.textContent === '3s');
-        }
-        this._inlineTimePicker.style.display = 'flex';
-      }
+      this.leftPanel.toggleTimePicker();
     }
   }
 
@@ -902,8 +727,7 @@ export class GameController {
     this.analysisGraph.setHighlight(this.history.getCurrentViewIndex());
 
     // Update the analyze button to show best move now that results are cached
-    this._analyzeBtnEl.textContent = 'Best Move';
-    this._analyzeBtnEl.classList.add('best-move-btn');
+    this.leftPanel.setAnalyzeLabel('Best Move', true);
   }
 
   _takeBack() {
@@ -938,13 +762,13 @@ export class GameController {
     this.state.showingHint = false;
     this.state.bestMove = null;
     this.boardView.clearHintArrow();
-    this._hintBtnEl.textContent = 'Hint';
+    this.leftPanel.setHintLabel('Hint');
 
     // Update move list
     this.moveList.render(this.history);
 
     // Disable take back if no moves left
-    this._takeBackBtnEl.disabled = this.history.length === 0;
+    this.leftPanel.setTakeBackEnabled(this.history.length > 0);
 
     // Switch clock to current turn after take-back
     if (this.chessClock.isActive) {
@@ -1008,10 +832,10 @@ export class GameController {
   _toggleHint() {
     this.state.showingHint = !this.state.showingHint;
     if (this.state.showingHint) {
-      this._hintBtnEl.textContent = 'Hide Hint';
+      this.leftPanel.setHintLabel('Hide Hint');
       this._showHintArrow();
     } else {
-      this._hintBtnEl.textContent = 'Hint';
+      this.leftPanel.setHintLabel('Hint');
       this.boardView.clearHintArrow();
     }
   }
@@ -1026,10 +850,10 @@ export class GameController {
   _toggleBestMoveArrow() {
     this.state.showingBestMove = !this.state.showingBestMove;
     if (this.state.showingBestMove) {
-      this._analyzeBtnEl.textContent = 'Hide Best Move';
+      this.leftPanel.setAnalyzeLabel('Hide Best Move');
       this._showBestMoveForCurrentPosition();
     } else {
-      this._analyzeBtnEl.textContent = 'Best Move';
+      this.leftPanel.setAnalyzeLabel('Best Move');
       this.boardView.clearHintArrow();
     }
   }
@@ -1045,163 +869,6 @@ export class GameController {
     } else {
       this.boardView.clearHintArrow();
     }
-  }
-
-  // --- Navigation ---
-
-  _navigateHistory(direction) {
-    const fen = direction === 'back' ? this.history.goBack() : this.history.goForward();
-
-    if (fen !== null) {
-      this._showPositionFromFen(fen);
-    } else if (direction === 'forward' && this.history.isAtCurrentPosition()) {
-      // Returned to current position
-      this.boardView.updatePosition(this.state.board);
-      this._updateCheckHighlight();
-    }
-
-    this.moveList.render(this.history);
-    const viewIdx = this.history.getCurrentViewIndex();
-    if (this.analysisGraph.visible) {
-      this.analysisGraph.setHighlight(viewIdx);
-    }
-    this._updateEvalBarFromAnalysis(viewIdx);
-    if (this.state.showingBestMove) this._showBestMoveForCurrentPosition();
-  }
-
-  _goToMoveIndex(idx) {
-    const fen = this.history.goToIndex(idx);
-    if (fen !== null) {
-      this._showPositionFromFen(fen);
-    } else if (this.history.isAtCurrentPosition()) {
-      this.boardView.updatePosition(this.state.board);
-      this._updateCheckHighlight();
-    }
-    this.moveList.render(this.history);
-    if (this.analysisGraph.visible) {
-      this.analysisGraph.setHighlight(idx);
-    }
-    this._updateEvalBarFromAnalysis(idx);
-    if (this.state.showingBestMove) this._showBestMoveForCurrentPosition();
-  }
-
-  _showPositionFromFen(fen) {
-    let view = this._positionCache.get(fen);
-    if (!view) {
-      const temp = new Chess(fen);
-      const board = temp.board();
-      // Show check highlight only if this position is in check.
-      view = {
-        board,
-        checkSquare: temp.isCheck() ? findKingSquare(board, temp.turn()) : null,
-      };
-      this._positionCache.set(fen, view);
-    }
-    this.boardView.updatePosition(view.board);
-    this.boardView.setCheck(view.checkSquare);
-  }
-
-  _updateEvalBarFromAnalysis(moveIndex) {
-    if (!this.state.analysisResults) return;
-    const evals = this.state.analysisResults.evaluations;
-    if (!evals || moveIndex < 0 || moveIndex >= evals.length) return;
-    const cp = evals[moveIndex];
-    if (cp !== null && cp !== undefined) {
-      this.evalBar.setEvalCp(cp);
-    }
-  }
-
-  _handleKeyboard(e) {
-    if (this.state.phase === 'setup') return;
-    if (this.history.length === 0) return;
-
-    switch (e.key) {
-      case 'ArrowLeft':
-        e.preventDefault();
-        this._navigateHistory('back');
-        break;
-      case 'ArrowRight':
-        e.preventDefault();
-        this._navigateHistory('forward');
-        break;
-      case 'ArrowUp':
-      case 'Home':
-        e.preventDefault();
-        {
-          const fen = this.history.goToStart();
-          if (fen) this._showPositionFromFen(fen);
-          this.moveList.render(this.history);
-          const startIdx = this.history.getCurrentViewIndex();
-          if (this.analysisGraph.visible) {
-            this.analysisGraph.setHighlight(startIdx);
-          }
-          this._updateEvalBarFromAnalysis(startIdx);
-          if (this.state.showingBestMove) this._showBestMoveForCurrentPosition();
-        }
-        break;
-      case 'ArrowDown':
-      case 'End':
-        e.preventDefault();
-        this.history.goToEnd();
-        this.boardView.updatePosition(this.state.board);
-        this._updateCheckHighlight();
-        this.moveList.render(this.history);
-        {
-          const endIdx = this.history.getCurrentViewIndex();
-          if (this.analysisGraph.visible) {
-            this.analysisGraph.setHighlight(endIdx);
-          }
-          this._updateEvalBarFromAnalysis(endIdx);
-          if (this.state.showingBestMove) this._showBestMoveForCurrentPosition();
-        }
-        break;
-    }
-  }
-
-  // --- Player Info ---
-
-  _buildPlayerInfo(role) {
-    const el = document.createElement('div');
-    el.className = `player-info ${role}`;
-    el.style.display = 'none';
-
-    const avatar = document.createElement('div');
-    avatar.className = 'player-avatar';
-
-    const name = document.createElement('span');
-    name.className = 'player-name';
-
-    el.appendChild(avatar);
-    el.appendChild(name);
-    return el;
-  }
-
-  _updatePlayerInfos() {
-    const isWhite = this.state.playerColor === 'w';
-    const difficulty = this.state.difficulty;
-
-    // Player info
-    const playerAvatar = this._playerInfo.querySelector('.player-avatar');
-    const playerName = this._playerInfo.querySelector('.player-name');
-    playerAvatar.textContent = isWhite ? 'W' : 'B';
-    playerAvatar.className = `player-avatar ${isWhite ? 'white-piece' : 'black-piece'}`;
-    playerName.textContent = 'You';
-
-    // Opponent info
-    const opponentAvatar = this._opponentInfo.querySelector('.player-avatar');
-    const opponentName = this._opponentInfo.querySelector('.player-name');
-    opponentAvatar.textContent = isWhite ? 'B' : 'W';
-    opponentAvatar.className = `player-avatar ${isWhite ? 'black-piece' : 'white-piece'}`;
-    if (this.state.moveTime != null) {
-      const mtOpt = MOVE_TIME_OPTIONS.find((o) => o.seconds === this.state.moveTime);
-      const mtLabel = mtOpt ? mtOpt.label : `${this.state.moveTime}s`;
-      opponentName.textContent = `Stockfish (${mtLabel}/move)`;
-    } else {
-      opponentName.textContent = `Stockfish (${getDifficultyLabel(difficulty)})`;
-    }
-
-    this._playerInfo.style.display = 'flex';
-    this._opponentInfo.style.display = 'flex';
   }
 
   // --- Lifecycle ---
@@ -1246,22 +913,18 @@ export class GameController {
   // --- Helpers ---
 
   _getPieceAt(square) {
-    const board = this.state.board;
-    const file = square.charCodeAt(0) - 97; // 'a' = 0
-    const rank = parseInt(square[1]) - 1; // '1' = 0
-    const row = 7 - rank;
-    return board[row][file];
+    return pieceAt(this.state.board, square);
   }
 
   _updateCheckHighlight() {
-    const sq = this.state.isCheck() ? findKingSquare(this.state.board, this.state.turn) : null;
+    const sq = checkHighlightSquare(this.state.board, this.state.turn, this.state.isCheck());
     this.boardView.setCheck(sq);
   }
 
   // --- Settings & Persistence ---
 
   _openSettings() {
-    this._leftPanelButtonsContainer.style.display = 'none';
+    this.leftPanel.setButtonsVisible(false);
     this.settingsDialog.show(this.settings);
   }
 
@@ -1269,25 +932,25 @@ export class GameController {
     const data = this.state.serialize(this.history);
     try {
       localStorage.setItem('claude-chess-save', JSON.stringify(data));
-      this._flashButton(this._saveBtnEl, 'Saved!');
+      this.leftPanel.flash('save', 'Saved!');
     } catch (e) {
       // Private-browsing mode or quota exceeded (the save blob can be large
       // when it carries cached analysisResults).
       console.error('Failed to save game:', e);
-      this._flashButton(this._saveBtnEl, 'Save failed');
+      this.leftPanel.flash('save', 'Save failed');
     }
   }
 
   _loadGame() {
     const raw = localStorage.getItem('claude-chess-save');
     if (!raw) {
-      this._flashButton(this._loadBtnEl, 'No saved game');
+      this.leftPanel.flash('load', 'No saved game');
       return;
     }
     try {
       this._cancelTransientGameWork();
       this.chessClock.stop();
-      this._positionCache.clear();
+      this.historyNavigator.clearCache();
       const data = JSON.parse(raw);
       const moveData = this.state.deserialize(data);
       if (moveData) {
@@ -1299,11 +962,9 @@ export class GameController {
       this.evalBar.reset();
       this.chessClock.hide();
       this.moveList.rebuild(this.history);
-      this._leftPanelEl.style.display = 'flex';
-      this._hintBtnEl.style.display = this.state.phase === 'over' ? 'none' : 'block';
-      this._takeBackBtnEl.style.display = this.state.phase === 'over' ? 'none' : 'block';
-      this._resignBtnEl.style.display = this.state.phase === 'over' ? 'none' : 'block';
-      this._takeBackBtnEl.disabled = this.history.length === 0;
+      this.leftPanel.setPanelVisible(true);
+      this.leftPanel.setInGameControlsVisible(this.state.phase !== 'over');
+      this.leftPanel.setTakeBackEnabled(this.history.length > 0);
       this._replayEl.style.display = 'none';
       if (this.state.phase === 'over') {
         this._handleGameOver();
@@ -1316,10 +977,10 @@ export class GameController {
           this._setTimeout(() => this._makeAIMove(), 300);
         }
       }
-      this._flashButton(this._loadBtnEl, 'Loaded!');
+      this.leftPanel.flash('load', 'Loaded!');
     } catch (e) {
       console.error('Failed to load game:', e);
-      this._flashButton(this._loadBtnEl, 'Load failed');
+      this.leftPanel.flash('load', 'Load failed');
     }
   }
 }

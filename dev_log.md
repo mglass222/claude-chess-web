@@ -5,10 +5,49 @@ Update this file whenever the program changes.
 
 ---
 
+## 2026-05-30
+
+### A1 (Tiers 1–2): GameController decomposition
+
+Began the deferred A1 architecture work via a brainstorm → spec → plan → execute
+flow (docs under `docs/superpowers/`). Extracted four focused modules from the
+1,325-line `GameController` — behavior-preserving, each verified in-browser and
+committed separately:
+
+- **`game/boardUtils.js`** — pure board helpers (`findKingSquare`, `pieceAt`,
+  `checkHighlightSquare`).
+- **`ui/PlayerInfoView.js`** — the player/opponent banners (build + `update`).
+- **`ui/LeftPanel.js`** — the entire left control panel (buttons, PGN/FEN copy,
+  settings, analyze, time-picker) behind intent methods + an `actions` callback map.
+- **`game/HistoryNavigator.js`** — history/view navigation (arrows, jump-to-index,
+  keyboard, position cache, per-move eval-bar sync); GameController no longer imports
+  `chess.js` directly.
+
+GameController dropped 1,325 → 986 lines. It stays grandfathered in the ESLint
+size-budget override; **Tier 3 (extracting `AnalysisController` + `MoveExecutor`) is
+the remaining path to clear the 400-line budget** and is deferred.
+*(eslint.config.js, CLAUDE.md updated.)*
+
+---
+
 ## 2026-05-29
 
 A fresh full-codebase audit produced a prioritized backlog (quick wins →
 performance → correctness → architecture). Working through it in order.
+
+### Guardrails — enforced size budgets + project guide
+To stop god-objects from re-accreting (GameController reached ~1.3k lines purely by
+addition — every change was locally reasonable, nothing tripped a limit), added an
+enforced budget and an architecture contract:
+
+- **ESLint size budgets.** `max-lines: 400` and `max-lines-per-function: 120` (code
+  lines only) as hard errors, wired into the existing `npm run lint` CI gate.
+  `GameController.js` and `BoardView.js` are grandfathered via an override whose
+  entries double as the tracked decomposition debt. *(eslint.config.js)*
+- **Added `CLAUDE.md`.** A project guide documenting the module boundaries (the
+  planned GameController seams — `AnalysisController` / `MoveExecutor` /
+  `HistoryNavigator` / panel view-builders), the "new responsibility → new module"
+  rule, the size budget, and the lint / format / build gates. *(CLAUDE.md)*
 
 ### Quick wins — dependency, asset, and game-over cleanup
 Low-risk, high-value fixes (lint + build green; verified in-browser: engine

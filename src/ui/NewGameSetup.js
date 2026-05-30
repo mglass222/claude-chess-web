@@ -24,6 +24,9 @@ export class NewGameSetup {
     this._build();
   }
 
+  // Long but cohesive DOM builder for the new-game dialog. Tracked size debt: if it
+  // grows further, extract per-section builders (Play-As / Time / Engine).
+  // eslint-disable-next-line max-lines-per-function
   _build() {
     this.el = document.createElement('div');
     this.el.className = 'inline-new-game-setup';
