@@ -30,17 +30,22 @@ export function loadSettings() {
  * @param {object} settings
  */
 export function saveSettings(settings) {
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify({
-      theme: settings.theme,
-      volume: settings.volume,
-      soundEnabled: settings.soundEnabled,
-      playerColor: settings.playerColor,
-      difficulty: settings.difficulty,
-      timeControl: settings.timeControl || 0,
-      moveTime: settings.moveTime ?? null,
-      pieceSet: settings.pieceSet,
-    })
-  );
+  try {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        theme: settings.theme,
+        volume: settings.volume,
+        soundEnabled: settings.soundEnabled,
+        playerColor: settings.playerColor,
+        difficulty: settings.difficulty,
+        timeControl: settings.timeControl || 0,
+        moveTime: settings.moveTime ?? null,
+        pieceSet: settings.pieceSet,
+      })
+    );
+  } catch {
+    // Storage unavailable (private mode) or over quota — settings simply won't
+    // persist; not worth interrupting the user over.
+  }
 }
