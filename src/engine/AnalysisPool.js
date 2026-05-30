@@ -19,7 +19,12 @@ export class AnalysisPool {
    */
   async analyze(fens, movetime, onProgress) {
     this._cancelled = false;
-    const workerCount = Math.min(fens.length, Math.max(2, navigator.hardwareConcurrency || 4));
+    // Cap the number of parallel engines. Each Stockfish WASM instance is ~7 MB
+    // plus its own hash tables, so one-per-core (16+ on big machines) can OOM a
+    // tab — and beyond ~4 there's little speedup for a CPU-bound search anyway.
+    const cores = navigator.hardwareConcurrency || 4;
+    const memCap = (navigator.deviceMemory || 4) <= 4 ? 2 : 4;
+    const workerCount = Math.min(fens.length, cores, memCap);
 
     // Initialize workers in parallel
     await this._initWorkers(workerCount);
@@ -129,19 +134,39 @@ export class AnalysisPool {
       }
 
       let best = null;
-      const timeoutId = setTimeout(() => {
+      let settled = false;
+      let searching = false; // only trust search output after our own readyok
+
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
         w.worker.onmessage = null;
+        resolve(result);
+      };
+
+      const timeoutId = setTimeout(() => {
         try {
           w.worker.postMessage('stop');
         } catch (_) {
           /* ignore */
         }
-        resolve(best);
+        finish(best);
       }, movetime + 5000);
 
       w.worker.onmessage = (e) => {
         const line = e.data;
-        if (typeof line !== 'string') return;
+        if (typeof line !== 'string' || settled) return;
+
+        // Handshake: wait for our own readyok before starting the search. This
+        // flushes any stray bestmove left over from a previous (stopped) search
+        // on this worker, so it can't prematurely resolve this position.
+        if (line === 'readyok') {
+          searching = true;
+          w.worker.postMessage(`go movetime ${movetime}`);
+          return;
+        }
+        if (!searching) return; // ignore stragglers from the prior position
 
         if (line.startsWith('info') && line.includes('score')) {
           const info = parseInfoLine(line);
@@ -153,16 +178,14 @@ export class AnalysisPool {
               bestMove: info.bestMove || null,
             };
           }
-        }
-
-        if (line.startsWith('bestmove')) {
-          clearTimeout(timeoutId);
-          resolve(best);
+        } else if (line.startsWith('bestmove')) {
+          finish(best);
         }
       };
 
+      // Set the position, then handshake; the readyok handler kicks off `go`.
       w.worker.postMessage(`position fen ${fen}`);
-      w.worker.postMessage(`go movetime ${movetime}`);
+      w.worker.postMessage('isready');
     });
   }
 
