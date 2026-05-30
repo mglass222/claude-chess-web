@@ -14,9 +14,7 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "chess.js": "^1.0.0-beta.8",
-    "howler": "^2.2.4",
-    "stockfish": "^17.1.0"
+    "chess.js": "^1.4.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
