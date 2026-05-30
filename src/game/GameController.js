@@ -15,22 +15,7 @@ import { NewGameSetup } from '../ui/NewGameSetup.js';
 import { SoundManager } from '../ui/SoundManager.js';
 import { ChessClock } from '../ui/ChessClock.js';
 import { MOVE_TIME_OPTIONS, evalToCp, getDifficultyLabel, ANALYSIS_DEPTH_MAX } from '../config.js';
-
-/**
- * Return the algebraic square (e.g. 'e1') of the given color's king, or null.
- * `board` is a chess.js board() array (board[0] is rank 8, board[7] is rank 1).
- */
-function findKingSquare(board, color) {
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      const p = board[r][c];
-      if (p && p.type === 'k' && p.color === color) {
-        return String.fromCharCode(97 + c) + (8 - r);
-      }
-    }
-  }
-  return null;
-}
+import { pieceAt, checkHighlightSquare } from './boardUtils.js';
 
 export class GameController {
   constructor() {
@@ -1093,7 +1078,7 @@ export class GameController {
       // Show check highlight only if this position is in check.
       view = {
         board,
-        checkSquare: temp.isCheck() ? findKingSquare(board, temp.turn()) : null,
+        checkSquare: checkHighlightSquare(board, temp.turn(), temp.isCheck()),
       };
       this._positionCache.set(fen, view);
     }
@@ -1246,15 +1231,11 @@ export class GameController {
   // --- Helpers ---
 
   _getPieceAt(square) {
-    const board = this.state.board;
-    const file = square.charCodeAt(0) - 97; // 'a' = 0
-    const rank = parseInt(square[1]) - 1; // '1' = 0
-    const row = 7 - rank;
-    return board[row][file];
+    return pieceAt(this.state.board, square);
   }
 
   _updateCheckHighlight() {
-    const sq = this.state.isCheck() ? findKingSquare(this.state.board, this.state.turn) : null;
+    const sq = checkHighlightSquare(this.state.board, this.state.turn, this.state.isCheck());
     this.boardView.setCheck(sq);
   }
 
