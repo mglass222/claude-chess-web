@@ -14,6 +14,8 @@ export class BoardView {
     this.squares = {}; // map of 'e4' -> div element
     this.pieces = {}; // map of 'e4' -> img element
     this.hintArrow = null;
+    this._hintSquares = null; // { from, to } currently highlighted by the hint
+    this._checkSquare = null; // square currently showing the check highlight
     this.annotations = []; // [{ type: 'arrow'|'square', from, to?, color }]
     this._rightClickFrom = null;
     this._rightClickColor = 'orange';
@@ -229,18 +231,23 @@ export class BoardView {
       pieceEl.style.transform = `translate(${dx}px, ${dy}px)${rot}`;
 
       setTimeout(() => {
-        // Animation done - restore CSS-driven transform and update DOM
+        // Animation done — settle the moved piece into the destination by
+        // reparenting the existing <img> (no destroy/recreate, no image reload),
+        // then reconcile the rest of the board (castling rook, en passant,
+        // promotion) via updatePosition.
         pieceEl.style.transition = 'none';
         pieceEl.style.transform = ''; // reverts to CSS class (rotate(180deg) if flipped)
         pieceEl.style.zIndex = '';
 
-        // Move piece from source to target square in DOM
-        if (this.pieces[from]) {
-          this.pieces[from].remove();
+        if (this.pieces[from] === pieceEl) {
           delete this.pieces[from];
         }
+        if (this.pieces[to] && this.pieces[to] !== pieceEl) {
+          this.pieces[to].remove();
+        }
+        this.squares[to].appendChild(pieceEl);
+        this.pieces[to] = pieceEl;
 
-        // Re-render position from board state
         this.updatePosition(board);
 
         this._animating = false;
@@ -296,12 +303,13 @@ export class BoardView {
   }
 
   setCheck(square) {
-    // Clear any existing check
-    for (const sq in this.squares) {
-      this.squares[sq].classList.remove('check');
+    // Only touch the previously-checked square instead of all 64.
+    if (this._checkSquare) {
+      this.squares[this._checkSquare]?.classList.remove('check');
     }
-    if (square) {
-      this.squares[square]?.classList.add('check');
+    this._checkSquare = square || null;
+    if (this._checkSquare) {
+      this.squares[this._checkSquare]?.classList.add('check');
     }
   }
 
@@ -312,6 +320,7 @@ export class BoardView {
     // Highlight squares
     this.squares[from]?.classList.add('hint-from');
     this.squares[to]?.classList.add('hint-to');
+    this._hintSquares = { from, to };
 
     const arrow = this._createArrowPolygon(from, to, 'rgba(0, 220, 0, 0.65)', 10, 22);
     arrow.classList.add('hint-arrow');
@@ -324,8 +333,10 @@ export class BoardView {
       this.hintArrow.remove();
       this.hintArrow = null;
     }
-    for (const sq in this.squares) {
-      this.squares[sq].classList.remove('hint-from', 'hint-to');
+    if (this._hintSquares) {
+      this.squares[this._hintSquares.from]?.classList.remove('hint-from');
+      this.squares[this._hintSquares.to]?.classList.remove('hint-to');
+      this._hintSquares = null;
     }
   }
 

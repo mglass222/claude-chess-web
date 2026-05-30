@@ -12,6 +12,7 @@ export class EvalBar {
     this._rafId = null;
     this._depthMet = false;
     this._maxDepthSeen = 0;
+    this._labelClass = ''; // last className written to the score label
 
     this._build();
   }
@@ -163,24 +164,23 @@ export class EvalBar {
   }
 
   _updateLabel() {
+    let text;
+    let advantage;
     if (this._isMate && this._mateIn !== null) {
-      const text = `M${Math.abs(this._mateIn)}`;
-      this.scoreLabel.textContent = text;
-      // Position based on who has advantage
-      if (this._mateIn > 0) {
-        // White advantage
-        this.scoreLabel.className = 'eval-score white-advantage';
-      } else {
-        this.scoreLabel.className = 'eval-score black-advantage';
-      }
+      text = `M${Math.abs(this._mateIn)}`;
+      advantage = this._mateIn > 0 ? 'white-advantage' : 'black-advantage';
     } else {
-      const pawns = Math.abs(this._currentCp / 100);
-      this.scoreLabel.textContent = pawns.toFixed(1);
-      if (this._currentCp >= 0) {
-        this.scoreLabel.className = 'eval-score white-advantage';
-      } else {
-        this.scoreLabel.className = 'eval-score black-advantage';
-      }
+      text = Math.abs(this._currentCp / 100).toFixed(1);
+      advantage = this._currentCp >= 0 ? 'white-advantage' : 'black-advantage';
+    }
+
+    // Per-frame the text changes but the advantage side rarely does; only write
+    // className when it actually flips to avoid invalidating style every frame.
+    if (this.scoreLabel.textContent !== text) this.scoreLabel.textContent = text;
+    const cls = `eval-score ${advantage}`;
+    if (this._labelClass !== cls) {
+      this.scoreLabel.className = cls;
+      this._labelClass = cls;
     }
   }
 
