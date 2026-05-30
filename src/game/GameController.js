@@ -14,8 +14,9 @@ import { SettingsDialog } from '../ui/SettingsDialog.js';
 import { NewGameSetup } from '../ui/NewGameSetup.js';
 import { SoundManager } from '../ui/SoundManager.js';
 import { ChessClock } from '../ui/ChessClock.js';
-import { MOVE_TIME_OPTIONS, evalToCp, getDifficultyLabel, ANALYSIS_DEPTH_MAX } from '../config.js';
+import { evalToCp, ANALYSIS_DEPTH_MAX } from '../config.js';
 import { pieceAt, checkHighlightSquare } from './boardUtils.js';
+import { PlayerInfoView } from '../ui/PlayerInfoView.js';
 
 export class GameController {
   constructor() {
@@ -92,8 +93,10 @@ export class GameController {
     // Create a row wrapper for eval bar + board
     const boardColumn = document.getElementById('board-column');
 
-    // Opponent info (above board)
-    this._opponentInfo = this._buildPlayerInfo('opponent');
+    // Player/opponent info banners (placement stays here; the view builds them)
+    this.playerInfoView = new PlayerInfoView();
+    this._opponentInfo = this.playerInfoView.opponentEl;
+    this._playerInfo = this.playerInfoView.playerEl;
     boardColumn.insertBefore(this._opponentInfo, boardArea);
 
     const boardRow = document.createElement('div');
@@ -105,7 +108,6 @@ export class GameController {
     boardRow.insertBefore(this.evalBar.el, boardArea);
 
     // Player info (below board)
-    this._playerInfo = this._buildPlayerInfo('player');
     boardColumn.insertBefore(this._playerInfo, document.getElementById('below-board'));
 
     // Inline game-over result banner (replaces the old modal overlay), shown
@@ -478,7 +480,7 @@ export class GameController {
     this.engine.setDifficulty(this.state.difficulty, this.state.moveTime);
 
     // Update player info
-    this._updatePlayerInfos();
+    this.playerInfoView.update(this.state);
 
     // Initialize chess clocks
     const timeMinutes = this.state.timeControl || this.settings.timeControl || 0;
@@ -1141,52 +1143,6 @@ export class GameController {
         }
         break;
     }
-  }
-
-  // --- Player Info ---
-
-  _buildPlayerInfo(role) {
-    const el = document.createElement('div');
-    el.className = `player-info ${role}`;
-    el.style.display = 'none';
-
-    const avatar = document.createElement('div');
-    avatar.className = 'player-avatar';
-
-    const name = document.createElement('span');
-    name.className = 'player-name';
-
-    el.appendChild(avatar);
-    el.appendChild(name);
-    return el;
-  }
-
-  _updatePlayerInfos() {
-    const isWhite = this.state.playerColor === 'w';
-    const difficulty = this.state.difficulty;
-
-    // Player info
-    const playerAvatar = this._playerInfo.querySelector('.player-avatar');
-    const playerName = this._playerInfo.querySelector('.player-name');
-    playerAvatar.textContent = isWhite ? 'W' : 'B';
-    playerAvatar.className = `player-avatar ${isWhite ? 'white-piece' : 'black-piece'}`;
-    playerName.textContent = 'You';
-
-    // Opponent info
-    const opponentAvatar = this._opponentInfo.querySelector('.player-avatar');
-    const opponentName = this._opponentInfo.querySelector('.player-name');
-    opponentAvatar.textContent = isWhite ? 'B' : 'W';
-    opponentAvatar.className = `player-avatar ${isWhite ? 'black-piece' : 'white-piece'}`;
-    if (this.state.moveTime != null) {
-      const mtOpt = MOVE_TIME_OPTIONS.find((o) => o.seconds === this.state.moveTime);
-      const mtLabel = mtOpt ? mtOpt.label : `${this.state.moveTime}s`;
-      opponentName.textContent = `Stockfish (${mtLabel}/move)`;
-    } else {
-      opponentName.textContent = `Stockfish (${getDifficultyLabel(difficulty)})`;
-    }
-
-    this._playerInfo.style.display = 'flex';
-    this._opponentInfo.style.display = 'flex';
   }
 
   // --- Lifecycle ---
