@@ -1,4 +1,3 @@
-import { Chess } from 'chess.js';
 import { GameState } from './GameState.js';
 import { MoveHistory } from './MoveHistory.js';
 import { generatePgn } from './pgn.js';
@@ -16,6 +15,7 @@ import { SoundManager } from '../ui/SoundManager.js';
 import { ChessClock } from '../ui/ChessClock.js';
 import { evalToCp, ANALYSIS_DEPTH_MAX } from '../config.js';
 import { pieceAt, checkHighlightSquare } from './boardUtils.js';
+import { HistoryNavigator } from './HistoryNavigator.js';
 import { PlayerInfoView } from '../ui/PlayerInfoView.js';
 import { LeftPanel } from '../ui/LeftPanel.js';
 
@@ -29,10 +29,6 @@ export class GameController {
 
     // Settings (persisted to localStorage)
     this.settings = loadSettings();
-
-    // Cache of derived view data (board array + check square) keyed by position
-    // FEN, so navigating history doesn't construct a fresh Chess() on every step.
-    this._positionCache = new Map();
 
     // UI components (created in init)
     this.boardView = null;
@@ -54,7 +50,7 @@ export class GameController {
     this._cancelAnalysis = false;
 
     // Bound handlers for cleanup
-    this._boundKeyboard = (e) => this._handleKeyboard(e);
+    this._boundKeyboard = (e) => this.historyNavigator.handleKey(e);
 
     // Tracked timeouts for cleanup
     this._pendingTimeouts = [];
@@ -143,6 +139,23 @@ export class GameController {
     this.promotionDialog = new PromotionDialog(boardArea);
     this.promotionDialog.pieceSet = this.settings.pieceSet;
 
+    // History/view navigation (back/forward/jump, keyboard, per-ply position cache)
+    this.historyNavigator = new HistoryNavigator({
+      history: this.history,
+      boardView: this.boardView,
+      evalBar: this.evalBar,
+      analysisGraph: this.analysisGraph,
+      moveList: this.moveList,
+      state: this.state,
+      onReturnToLive: () => {
+        this.boardView.updatePosition(this.state.board);
+        this._updateCheckHighlight();
+      },
+      onPositionShown: () => {
+        if (this.state.showingBestMove) this._showBestMoveForCurrentPosition();
+      },
+    });
+
     // Build below-board area (hint + replay)
     this._buildBelowBoard(belowBoard);
 
@@ -201,12 +214,12 @@ export class GameController {
     const prevBtn = document.createElement('button');
     prevBtn.className = 'replay-btn';
     prevBtn.textContent = '\u25C0'; // left arrow
-    prevBtn.addEventListener('click', () => this._navigateHistory('back'));
+    prevBtn.addEventListener('click', () => this.historyNavigator.back());
 
     const nextBtn = document.createElement('button');
     nextBtn.className = 'replay-btn';
     nextBtn.textContent = '\u25B6'; // right arrow
-    nextBtn.addEventListener('click', () => this._navigateHistory('forward'));
+    nextBtn.addEventListener('click', () => this.historyNavigator.forward());
 
     this._replayEl.appendChild(prevBtn);
     this._replayEl.appendChild(nextBtn);
@@ -237,11 +250,11 @@ export class GameController {
     this.boardView.onPieceDragStart = (square) => this._handleDragStart(square);
 
     // Move list clicks
-    this.moveList.onMoveClick = (idx) => this._goToMoveIndex(idx);
+    this.moveList.onMoveClick = (idx) => this.historyNavigator.goToIndex(idx);
 
     // Analysis graph
     this.analysisGraph.onMoveClick = (idx) => {
-      this._goToMoveIndex(idx);
+      this.historyNavigator.goToIndex(idx);
       this.analysisGraph.setHighlight(idx);
     };
     this.analysisGraph.onCancel = () => {
@@ -301,7 +314,7 @@ export class GameController {
     this.state.showingBestMove = false;
     this.state.resetGame();
     this.state.startGame();
-    this._positionCache.clear();
+    this.historyNavigator.clearCache();
     this.history.clear();
     this.history.setInitialFen(this.state.fen);
 
@@ -363,7 +376,7 @@ export class GameController {
     this.state.resetGame();
     this.state.playerColor = this.state.lastPlayerColor;
     this.state.difficulty = this.state.lastDifficulty;
-    this._positionCache.clear();
+    this.historyNavigator.clearCache();
     this.history.clear();
     this.history.setInitialFen(this.state.fen);
 
@@ -858,117 +871,6 @@ export class GameController {
     }
   }
 
-  // --- Navigation ---
-
-  _navigateHistory(direction) {
-    const fen = direction === 'back' ? this.history.goBack() : this.history.goForward();
-
-    if (fen !== null) {
-      this._showPositionFromFen(fen);
-    } else if (direction === 'forward' && this.history.isAtCurrentPosition()) {
-      // Returned to current position
-      this.boardView.updatePosition(this.state.board);
-      this._updateCheckHighlight();
-    }
-
-    this.moveList.render(this.history);
-    const viewIdx = this.history.getCurrentViewIndex();
-    if (this.analysisGraph.visible) {
-      this.analysisGraph.setHighlight(viewIdx);
-    }
-    this._updateEvalBarFromAnalysis(viewIdx);
-    if (this.state.showingBestMove) this._showBestMoveForCurrentPosition();
-  }
-
-  _goToMoveIndex(idx) {
-    const fen = this.history.goToIndex(idx);
-    if (fen !== null) {
-      this._showPositionFromFen(fen);
-    } else if (this.history.isAtCurrentPosition()) {
-      this.boardView.updatePosition(this.state.board);
-      this._updateCheckHighlight();
-    }
-    this.moveList.render(this.history);
-    if (this.analysisGraph.visible) {
-      this.analysisGraph.setHighlight(idx);
-    }
-    this._updateEvalBarFromAnalysis(idx);
-    if (this.state.showingBestMove) this._showBestMoveForCurrentPosition();
-  }
-
-  _showPositionFromFen(fen) {
-    let view = this._positionCache.get(fen);
-    if (!view) {
-      const temp = new Chess(fen);
-      const board = temp.board();
-      // Show check highlight only if this position is in check.
-      view = {
-        board,
-        checkSquare: checkHighlightSquare(board, temp.turn(), temp.isCheck()),
-      };
-      this._positionCache.set(fen, view);
-    }
-    this.boardView.updatePosition(view.board);
-    this.boardView.setCheck(view.checkSquare);
-  }
-
-  _updateEvalBarFromAnalysis(moveIndex) {
-    if (!this.state.analysisResults) return;
-    const evals = this.state.analysisResults.evaluations;
-    if (!evals || moveIndex < 0 || moveIndex >= evals.length) return;
-    const cp = evals[moveIndex];
-    if (cp !== null && cp !== undefined) {
-      this.evalBar.setEvalCp(cp);
-    }
-  }
-
-  _handleKeyboard(e) {
-    if (this.state.phase === 'setup') return;
-    if (this.history.length === 0) return;
-
-    switch (e.key) {
-      case 'ArrowLeft':
-        e.preventDefault();
-        this._navigateHistory('back');
-        break;
-      case 'ArrowRight':
-        e.preventDefault();
-        this._navigateHistory('forward');
-        break;
-      case 'ArrowUp':
-      case 'Home':
-        e.preventDefault();
-        {
-          const fen = this.history.goToStart();
-          if (fen) this._showPositionFromFen(fen);
-          this.moveList.render(this.history);
-          const startIdx = this.history.getCurrentViewIndex();
-          if (this.analysisGraph.visible) {
-            this.analysisGraph.setHighlight(startIdx);
-          }
-          this._updateEvalBarFromAnalysis(startIdx);
-          if (this.state.showingBestMove) this._showBestMoveForCurrentPosition();
-        }
-        break;
-      case 'ArrowDown':
-      case 'End':
-        e.preventDefault();
-        this.history.goToEnd();
-        this.boardView.updatePosition(this.state.board);
-        this._updateCheckHighlight();
-        this.moveList.render(this.history);
-        {
-          const endIdx = this.history.getCurrentViewIndex();
-          if (this.analysisGraph.visible) {
-            this.analysisGraph.setHighlight(endIdx);
-          }
-          this._updateEvalBarFromAnalysis(endIdx);
-          if (this.state.showingBestMove) this._showBestMoveForCurrentPosition();
-        }
-        break;
-    }
-  }
-
   // --- Lifecycle ---
 
   _setTimeout(fn, delay) {
@@ -1048,7 +950,7 @@ export class GameController {
     try {
       this._cancelTransientGameWork();
       this.chessClock.stop();
-      this._positionCache.clear();
+      this.historyNavigator.clearCache();
       const data = JSON.parse(raw);
       const moveData = this.state.deserialize(data);
       if (moveData) {
