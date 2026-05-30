@@ -10,12 +10,11 @@ import { EvalBar } from '../ui/EvalBar.js';
 import { MoveList } from '../ui/MoveList.js';
 import { AnalysisGraph } from '../ui/AnalysisGraph.js';
 import { PromotionDialog } from '../ui/PromotionDialog.js';
-import { GameOverOverlay } from '../ui/GameOverOverlay.js';
 import { SettingsDialog } from '../ui/SettingsDialog.js';
 import { NewGameSetup } from '../ui/NewGameSetup.js';
 import { SoundManager } from '../ui/SoundManager.js';
 import { ChessClock } from '../ui/ChessClock.js';
-import { MOVE_TIME_OPTIONS, evalToCp, getDifficultyLabel } from '../config.js';
+import { MOVE_TIME_OPTIONS, evalToCp, getDifficultyLabel, ANALYSIS_DEPTH_MAX } from '../config.js';
 
 /**
  * Return the algebraic square (e.g. 'e1') of the given color's king, or null.
@@ -44,13 +43,16 @@ export class GameController {
     // Settings (persisted to localStorage)
     this.settings = loadSettings();
 
+    // Cache of derived view data (board array + check square) keyed by position
+    // FEN, so navigating history doesn't construct a fresh Chess() on every step.
+    this._positionCache = new Map();
+
     // UI components (created in init)
     this.boardView = null;
     this.evalBar = null;
     this.moveList = null;
     this.analysisGraph = null;
     this.promotionDialog = null;
-    this.gameOverOverlay = null;
     this.settingsDialog = null;
     this.newGameSetup = null;
     this.chessClock = null;
@@ -121,6 +123,13 @@ export class GameController {
     this._playerInfo = this._buildPlayerInfo('player');
     boardColumn.insertBefore(this._playerInfo, document.getElementById('below-board'));
 
+    // Inline game-over result banner (replaces the old modal overlay), shown
+    // directly under the board on checkmate / draw / resignation / timeout.
+    this._resultBanner = document.createElement('div');
+    this._resultBanner.className = 'game-result';
+    this._resultBanner.style.display = 'none';
+    boardColumn.insertBefore(this._resultBanner, this._playerInfo);
+
     // Chess clocks (each placed on its color's side of the board)
     this.chessClock = new ChessClock(this._playerInfo, this._opponentInfo);
     this.chessClock.onTimeOut = (color) => this._handleTimeOut(color);
@@ -139,7 +148,6 @@ export class GameController {
     this.analysisGraph = new AnalysisGraph(boardArea, rightPanel);
     this.promotionDialog = new PromotionDialog(boardArea);
     this.promotionDialog.pieceSet = this.settings.pieceSet;
-    this.gameOverOverlay = new GameOverOverlay(boardArea);
 
     // Settings button (added to left panel in _buildLeftPanel)
 
@@ -393,11 +401,6 @@ export class GameController {
     // Move list clicks
     this.moveList.onMoveClick = (idx) => this._goToMoveIndex(idx);
 
-    // Game over overlay
-    this.gameOverOverlay.onRestart = () => this._restart();
-    this.gameOverOverlay.onNewGame = () => this._newGame();
-    this.gameOverOverlay.onAnalyze = (movetimeMs) => this._runPostGameAnalysis(movetimeMs);
-
     // Analysis graph
     this.analysisGraph.onMoveClick = (idx) => {
       this._goToMoveIndex(idx);
@@ -453,7 +456,7 @@ export class GameController {
   }
 
   _startGame() {
-    this.gameOverOverlay.hide();
+    this._resultBanner.style.display = 'none';
     this._analyzeBtnEl.style.display = 'none';
     this._analyzeBtnEl.classList.remove('best-move-btn');
     this._inlineTimePicker.style.display = 'none';
@@ -461,6 +464,7 @@ export class GameController {
     this.state.showingBestMove = false;
     this.state.resetGame();
     this.state.startGame();
+    this._positionCache.clear();
     this.history.clear();
     this.history.setInitialFen(this.state.fen);
 
@@ -516,7 +520,7 @@ export class GameController {
   _restart() {
     this._cancelTransientGameWork();
     this.chessClock.stop();
-    this.gameOverOverlay.hide();
+    this._resultBanner.style.display = 'none';
     this._analyzeBtnEl.style.display = 'none';
     this._analyzeBtnEl.classList.remove('best-move-btn');
     this._inlineTimePicker.style.display = 'none';
@@ -525,6 +529,7 @@ export class GameController {
     this.state.resetGame();
     this.state.playerColor = this.state.lastPlayerColor;
     this.state.difficulty = this.state.lastDifficulty;
+    this._positionCache.clear();
     this.history.clear();
     this.history.setInitialFen(this.state.fen);
 
@@ -767,7 +772,7 @@ export class GameController {
     this._startAnalysis();
   }
 
-  _handleGameOver() {
+  _handleGameOver(reason) {
     this.engine.cancelPendingMove();
     this.engine.stopAnalysis();
     this.chessClock.stop();
@@ -787,6 +792,28 @@ export class GameController {
       this._analyzeBtnEl.classList.remove('best-move-btn');
     }
     this._inlineTimePicker.style.display = 'none';
+
+    this._showResult(reason);
+  }
+
+  _showResult(reason) {
+    this._resultBanner.textContent = this._gameOverMessage(reason);
+    this._resultBanner.classList.toggle('is-draw', !this.state.winner);
+    this._resultBanner.style.display = 'block';
+  }
+
+  // Human-readable game-over message. `reason` is 'timeout' or 'resignation'
+  // for those paths; otherwise the reason is derived from chess.js.
+  _gameOverMessage(reason) {
+    const winner = this.state.winner;
+    if (reason === 'timeout') return `${winner} wins on time`;
+    if (reason === 'resignation') return `${winner} wins by resignation`;
+    const chess = this.state.chess;
+    if (chess.isCheckmate()) return `Checkmate · ${winner} wins`;
+    if (chess.isStalemate()) return 'Stalemate · Draw';
+    if (chess.isInsufficientMaterial()) return 'Draw · insufficient material';
+    if (chess.isThreefoldRepetition()) return 'Draw · repetition';
+    return winner ? `${winner} wins` : 'Draw';
   }
 
   _handleAnalyzeClick() {
@@ -814,7 +841,7 @@ export class GameController {
     this.state.phase = 'over';
     // The player who ran out of time loses
     this.state.winner = color === 'w' ? 'Black' : 'White';
-    this._handleGameOver();
+    this._handleGameOver('timeout');
   }
 
   _resign() {
@@ -822,7 +849,7 @@ export class GameController {
     this._clearPendingTimeouts();
     this.state.phase = 'over';
     this.state.winner = this.state.playerColor === 'w' ? 'Black' : 'White';
-    this._handleGameOver();
+    this._handleGameOver('resignation');
   }
 
   async _runPostGameAnalysis(movetime) {
@@ -884,10 +911,10 @@ export class GameController {
     if (this.history.length === 0) return;
     if (!this.history.isAtCurrentPosition()) return;
 
-    // Clear pending timeouts (cancel scheduled AI move)
-    this._clearPendingTimeouts();
-    this.engine.cancelPendingMove();
-    this.engine.stopAnalysis();
+    // Cancel any in-flight AI move / scheduled retry AND bump the session id, so
+    // an AI move that resolves mid-take-back can't be applied to the now-undone
+    // position (the session guards in _makeAIMove will bail).
+    this._cancelTransientGameWork();
 
     // Determine how many half-moves to undo
     const undoCount = this.state.isPlayerTurn ? 2 : 1;
@@ -941,7 +968,7 @@ export class GameController {
     // search and lines emitted by the AI's own move search can't drive the bar.
     const analysisFen = this.state.fen;
     this.engine.onAnalysisUpdate = (info) => this._handleAnalysisUpdate(info, analysisFen);
-    this.engine.startAnalysis(analysisFen, this.state.analysisDepth);
+    this.engine.startAnalysis(analysisFen, Math.min(this.state.analysisDepth, ANALYSIS_DEPTH_MAX));
   }
 
   _handleAnalysisUpdate(info, analysisFen) {
@@ -1059,10 +1086,19 @@ export class GameController {
   }
 
   _showPositionFromFen(fen) {
-    const temp = new Chess(fen);
-    this.boardView.updatePosition(temp.board());
-    // Show check highlight only if this position is in check
-    this.boardView.setCheck(temp.isCheck() ? findKingSquare(temp.board(), temp.turn()) : null);
+    let view = this._positionCache.get(fen);
+    if (!view) {
+      const temp = new Chess(fen);
+      const board = temp.board();
+      // Show check highlight only if this position is in check.
+      view = {
+        board,
+        checkSquare: temp.isCheck() ? findKingSquare(board, temp.turn()) : null,
+      };
+      this._positionCache.set(fen, view);
+    }
+    this.boardView.updatePosition(view.board);
+    this.boardView.setCheck(view.checkSquare);
   }
 
   _updateEvalBarFromAnalysis(moveIndex) {
@@ -1231,8 +1267,15 @@ export class GameController {
 
   _saveGame() {
     const data = this.state.serialize(this.history);
-    localStorage.setItem('claude-chess-save', JSON.stringify(data));
-    this._flashButton(this._saveBtnEl, 'Saved!');
+    try {
+      localStorage.setItem('claude-chess-save', JSON.stringify(data));
+      this._flashButton(this._saveBtnEl, 'Saved!');
+    } catch (e) {
+      // Private-browsing mode or quota exceeded (the save blob can be large
+      // when it carries cached analysisResults).
+      console.error('Failed to save game:', e);
+      this._flashButton(this._saveBtnEl, 'Save failed');
+    }
   }
 
   _loadGame() {
@@ -1244,16 +1287,18 @@ export class GameController {
     try {
       this._cancelTransientGameWork();
       this.chessClock.stop();
+      this._positionCache.clear();
       const data = JSON.parse(raw);
       const moveData = this.state.deserialize(data);
       if (moveData) {
         this.history.deserialize(moveData);
       }
       this.boardView.renderPosition(this.state.board, this.state.playerColor);
+      this._resultBanner.style.display = 'none';
       this.evalBar.setPlayerColor(this.state.playerColor);
       this.evalBar.reset();
       this.chessClock.hide();
-      this.moveList.render(this.history);
+      this.moveList.rebuild(this.history);
       this._leftPanelEl.style.display = 'flex';
       this._hintBtnEl.style.display = this.state.phase === 'over' ? 'none' : 'block';
       this._takeBackBtnEl.style.display = this.state.phase === 'over' ? 'none' : 'block';

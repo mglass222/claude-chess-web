@@ -17,6 +17,12 @@ export class EngineManager {
     this._moveTimeoutId = null;
     this._pendingMoveResolve = null;
     this._moveRequestId = 0;
+
+    // Info-line throttle: coalesce engine `info` output to one parse + dispatch
+    // per animation frame (the engine emits hundreds of lines/sec at depth, but
+    // the eval bar can only show ~60/sec).
+    this._pendingInfoLine = null;
+    this._infoRafId = null;
   }
 
   async init() {
@@ -34,15 +40,16 @@ export class EngineManager {
 
         this.worker.onerror = (err) => {
           console.error('Engine worker error:', err);
+          // Mark dead first so cancelPendingMove doesn't postMessage to it.
+          this.ready = false;
           if (this._initReject) {
             this._initReject(err);
             this._initReject = null;
           }
-          // Handle post-init errors: resolve pending move with null
-          if (this.onBestMove) {
-            this.onBestMove(null);
-            this.onBestMove = null;
-          }
+          // Fail fast on a post-init crash so a pending AI move resolves now
+          // (with null) instead of soft-locking until the 15s timeout. This
+          // resolves the getMove promise and clears its callbacks/timeouts.
+          this.cancelPendingMove();
         };
 
         // Send UCI init - the worker will respond with 'uciok'
@@ -75,12 +82,16 @@ export class EngineManager {
       return;
     }
 
-    // Parse UCI info lines during analysis
+    // Throttle UCI info lines: keep only the most recent and parse + dispatch it
+    // once per animation frame, rather than parsing every line (hundreds/sec).
+    // Skip entirely when nobody is listening (e.g. during the AI's move search).
     if (line.startsWith('info') && line.includes('score')) {
-      const info = parseInfoLine(line);
-      if (info && this.onAnalysisUpdate) {
-        this.onAnalysisUpdate(info);
+      if (!this.onAnalysisUpdate) return;
+      this._pendingInfoLine = line;
+      if (this._infoRafId === null) {
+        this._infoRafId = requestAnimationFrame(() => this._flushInfo());
       }
+      return;
     }
 
     // Best move response
@@ -94,6 +105,26 @@ export class EngineManager {
         this.onBestMove = null;
       }
     }
+  }
+
+  // Parse and dispatch the most recent buffered info line (called from rAF).
+  _flushInfo() {
+    this._infoRafId = null;
+    const line = this._pendingInfoLine;
+    this._pendingInfoLine = null;
+    if (!line || !this.onAnalysisUpdate) return;
+    const info = parseInfoLine(line);
+    if (info) this.onAnalysisUpdate(info);
+  }
+
+  // Drop any buffered info line and cancel a pending flush. Called whenever a
+  // search starts or stops so a stale line can't reach the new position.
+  _resetInfoThrottle() {
+    if (this._infoRafId !== null) {
+      cancelAnimationFrame(this._infoRafId);
+      this._infoRafId = null;
+    }
+    this._pendingInfoLine = null;
   }
 
   setDifficulty(difficulty, moveTimeSec = null) {
@@ -166,6 +197,7 @@ export class EngineManager {
 
   cancelPendingMove() {
     this._moveRequestId++;
+    this._resetInfoThrottle();
     if (this._moveTimeoutId) {
       clearTimeout(this._moveTimeoutId);
       this._moveTimeoutId = null;
@@ -186,6 +218,7 @@ export class EngineManager {
     if (!this.ready) return;
 
     this.analyzing = true;
+    this._resetInfoThrottle();
     this.worker.postMessage('stop');
 
     if (this._analysisTimeoutId) {
@@ -202,6 +235,7 @@ export class EngineManager {
   stopAnalysis() {
     if (!this.ready) return;
     this.analyzing = false;
+    this._resetInfoThrottle();
     // Clear any pending analysis timeout to prevent stale commands
     if (this._analysisTimeoutId) {
       clearTimeout(this._analysisTimeoutId);

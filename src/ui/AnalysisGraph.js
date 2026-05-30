@@ -52,6 +52,7 @@ export class AnalysisGraph {
 
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'analysis-graph-canvas';
+    this.ctx = this.canvas.getContext('2d'); // cached once; valid across resizes
     this.canvas.addEventListener('click', (e) => this._handleCanvasClick(e));
     this.canvas.addEventListener('mousemove', (e) => this._handleCanvasMouseMove(e));
 
@@ -233,7 +234,7 @@ export class AnalysisGraph {
     const evaluations = this._evaluations;
     if (!evaluations) return;
 
-    const ctx = this.canvas.getContext('2d');
+    const ctx = this.ctx;
     const W = this.canvas.width;
     const H = this.canvas.height;
     const dpr = window.devicePixelRatio || 1;

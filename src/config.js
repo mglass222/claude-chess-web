@@ -104,7 +104,7 @@ export const DEFAULTS = {
   pieceSet: 'cburnett',
   volume: 0.5,
   soundEnabled: true,
-  analysisDepth: 24,
+  analysisDepth: 22, // = ANALYSIS_DEPTH_MAX; also clamped at use-site in _startAnalysis
 };
 
 export const ANIMATION_DURATION = 300; // ms
