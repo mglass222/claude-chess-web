@@ -10,6 +10,20 @@ Update this file whenever the program changes.
 A fresh full-codebase audit produced a prioritized backlog (quick wins →
 performance → correctness → architecture). Working through it in order.
 
+### Guardrails — enforced size budgets + project guide
+To stop god-objects from re-accreting (GameController reached ~1.3k lines purely by
+addition — every change was locally reasonable, nothing tripped a limit), added an
+enforced budget and an architecture contract:
+
+- **ESLint size budgets.** `max-lines: 400` and `max-lines-per-function: 120` (code
+  lines only) as hard errors, wired into the existing `npm run lint` CI gate.
+  `GameController.js` and `BoardView.js` are grandfathered via an override whose
+  entries double as the tracked decomposition debt. *(eslint.config.js)*
+- **Added `CLAUDE.md`.** A project guide documenting the module boundaries (the
+  planned GameController seams — `AnalysisController` / `MoveExecutor` /
+  `HistoryNavigator` / panel view-builders), the "new responsibility → new module"
+  rule, the size budget, and the lint / format / build gates. *(CLAUDE.md)*
+
 ### Quick wins — dependency, asset, and game-over cleanup
 Low-risk, high-value fixes (lint + build green; verified in-browser: engine
 loads, fonts render, and a resignation now shows an inline result):
