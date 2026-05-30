@@ -14,12 +14,7 @@ import { SettingsDialog } from '../ui/SettingsDialog.js';
 import { NewGameSetup } from '../ui/NewGameSetup.js';
 import { SoundManager } from '../ui/SoundManager.js';
 import { ChessClock } from '../ui/ChessClock.js';
-import {
-  MOVE_TIME_OPTIONS,
-  evalToCp,
-  getDifficultyLabel,
-  ANALYSIS_DEPTH_MAX,
-} from '../config.js';
+import { MOVE_TIME_OPTIONS, evalToCp, getDifficultyLabel, ANALYSIS_DEPTH_MAX } from '../config.js';
 
 /**
  * Return the algebraic square (e.g. 'e1') of the given color's king, or null.
