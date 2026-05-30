@@ -19,6 +19,14 @@ export class AnalysisPool {
    */
   async analyze(fens, movetime, onProgress) {
     this._cancelled = false;
+
+    // Empty input: settle immediately. Otherwise workerCount becomes 0, the
+    // kickoff loop never runs, and this Promise would never resolve. Returning
+    // null routes the caller down its existing "no results" path. (Not reachable
+    // today — the sole caller always passes at least the initial position — but
+    // keeps analyze() total for any future caller.)
+    if (!fens || fens.length === 0) return null;
+
     // Cap the number of parallel engines. Each Stockfish WASM instance is ~7 MB
     // plus its own hash tables, so one-per-core (16+ on big machines) can OOM a
     // tab — and beyond ~4 there's little speedup for a CPU-bound search anyway.
