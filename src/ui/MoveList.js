@@ -1,9 +1,12 @@
+import { NOTABLE_TYPES, CLASSIFICATION_GLYPHS } from '../game/moveClassification.js';
+
 export class MoveList {
   constructor(container) {
     this.container = container;
     this.onMoveClick = null; // callback(moveIndex)
     this._renderedCount = 0; // number of move spans currently in the DOM
     this._activeEl = null;
+    this._classifications = null; // per-move quality, indexed by full-history idx
     this._build();
   }
 
@@ -65,6 +68,10 @@ export class MoveList {
 
     this._setActive(moveHistory.getCurrentViewIndex());
 
+    // Re-cover any freshly appended spans with their quality color (colors on
+    // existing spans persist across incremental renders; this is defensive).
+    if (this._classifications) this._applyClassifications();
+
     if (moveHistory.isAtCurrentPosition()) {
       this.listEl.scrollTop = this.listEl.scrollHeight;
     } else if (this._activeEl) {
@@ -77,7 +84,42 @@ export class MoveList {
     this.listEl.innerHTML = '';
     this._renderedCount = 0;
     this._activeEl = null;
+    this._classifications = null;
     this.render(moveHistory);
+  }
+
+  /**
+   * Tint moves by post-game quality so the list mirrors the analysis-graph dots.
+   * `classifications` is the array from `classifyMoves` (or AnalysisGraph
+   * `getClassifications()`), indexed by full-history position to match `data-idx`.
+   */
+  setClassifications(classifications) {
+    this._classifications = classifications;
+    this._applyClassifications();
+  }
+
+  _applyClassifications() {
+    const spans = this.listEl.querySelectorAll('.move-san');
+    for (const span of spans) {
+      const cls = this._classifications?.[Number(span.dataset.idx)];
+      // Drop any prior glyph first so reapplication (navigation, re-analysis)
+      // never stacks duplicates.
+      span.querySelector('.move-q-glyph')?.remove();
+      if (cls && NOTABLE_TYPES.has(cls.type)) {
+        span.dataset.quality = cls.type;
+        span.style.setProperty('--q-color', cls.color);
+        const glyph = CLASSIFICATION_GLYPHS[cls.type];
+        if (glyph) {
+          const g = document.createElement('span');
+          g.className = 'move-q-glyph';
+          g.textContent = glyph;
+          span.appendChild(g); // inherits the move's --q-color (and active color)
+        }
+      } else if (span.dataset.quality) {
+        delete span.dataset.quality;
+        span.style.removeProperty('--q-color');
+      }
+    }
   }
 
   _appendMove(san, k) {
@@ -130,6 +172,7 @@ export class MoveList {
     this.listEl.innerHTML = '';
     this._renderedCount = 0;
     this._activeEl = null;
+    this._classifications = null;
     const empty = document.createElement('div');
     empty.className = 'move-list-empty';
     empty.textContent = 'No moves yet';

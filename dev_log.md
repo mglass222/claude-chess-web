@@ -5,6 +5,39 @@ Update this file whenever the program changes.
 
 ---
 
+## 2026-05-31
+
+### UX — color-coded moves in the Move History list
+
+After post-game analysis, moves in the Move History list are now tinted to match
+their dot on the evaluation graph: **blunder** (red), **mistake/miss** (orange),
+**inaccuracy** (yellow), **brilliant** (teal), **great** (blue). Quiet moves
+(good / best / excellent — the ones with no dot on the graph) stay unmarked, so
+the list mirrors the graph one-for-one.
+
+- Extracted the chess.com-style win%-loss classifier out of the (presentational)
+  `AnalysisGraph` into a shared game-model module **`game/moveClassification.js`**
+  (`classifyMoves`, `NOTABLE_TYPES`), so the graph dots and the move-list colors
+  share a single color source. `AnalysisGraph` now imports it; its `_draw` uses
+  `NOTABLE_TYPES` and it exposes `getClassifications()`.
+- `MoveList.setClassifications()` applies each move's color by `data-idx` (which
+  already lines up with the classification index) via a `--q-color` custom
+  property + `data-quality` attribute; CSS rule `.move-san[data-quality]` is
+  declared before `.move-san.active` so the active highlight still overrides it.
+  Colors reset on new game / load (`clear` / `rebuild`).
+- `GameController._runPostGameAnalysis` calls `setClassifications` right after each
+  `showGraph` (both the fresh and the cached path).
+  *(src/game/moveClassification.js, src/ui/AnalysisGraph.js, src/ui/MoveList.js,
+  src/styles/panels.css, src/game/GameController.js)*
+
+Follow-up: each notable move also gets its standard annotation glyph after the
+SAN — `!!` brilliant, `!` great, `?!` inaccuracy, `?` mistake/miss, `??` blunder.
+The glyph is a `.move-q-glyph` child span (plain text) that inherits the move's
+color, so it matches the tint and goes dark when the move is active. Added
+`CLASSIFICATION_GLYPHS` to `moveClassification.js`; `_applyClassifications`
+appends/refreshes the glyph idempotently.
+*(src/game/moveClassification.js, src/ui/MoveList.js, src/styles/panels.css)*
+
 ## 2026-05-30
 
 ### UX — center the game-over result on the board

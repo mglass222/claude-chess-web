@@ -720,6 +720,7 @@ export class GameController {
     // If cached results exist, show graph immediately
     if (this.state.analysisResults) {
       this.analysisGraph.showGraph(this.state.analysisResults.evaluations);
+      this.moveList.setClassifications(this.analysisGraph.getClassifications());
       this.analysisGraph.setHighlight(this.history.getCurrentViewIndex());
       return;
     }
@@ -763,6 +764,7 @@ export class GameController {
     // Store results and show graph
     this.state.analysisResults = { evaluations, bestMoves, movetime };
     this.analysisGraph.showGraph(evaluations);
+    this.moveList.setClassifications(this.analysisGraph.getClassifications());
     this.analysisGraph.setHighlight(this.history.getCurrentViewIndex());
 
     // Update the analyze button to show best move now that results are cached
