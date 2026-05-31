@@ -238,20 +238,34 @@
   animation: panelFadeIn 0.25s ease forwards;
 }
 
-/* Inline game-over result (replaces the old modal overlay) */
+/* Game-over result: a card centered on the board, dimming/blurring it behind. */
+.game-result-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border-radius: 3px;
+  z-index: 35;
+  animation: overlayFadeIn 0.25s ease forwards;
+}
+
 .game-result {
-  margin: 10px auto 0;
-  padding: 8px 20px;
+  padding: 16px 32px;
   text-align: center;
   font-family: var(--font-display);
-  font-size: 1.6rem;
+  font-size: 2rem;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: var(--accent);
-  background: var(--panel-bg);
+  background: rgba(24, 22, 30, 0.92);
   border: 1px solid var(--glass-border);
-  border-radius: var(--btn-radius);
-  animation: panelFadeIn 0.25s ease forwards;
+  border-radius: var(--dialog-radius);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+  animation: dialogSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .game-result.is-draw {

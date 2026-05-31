@@ -7,6 +7,31 @@ Update this file whenever the program changes.
 
 ## 2026-05-30
 
+### UX — center the game-over result on the board
+The result announcement (e.g. "Checkmate · Black wins") rendered as an inline
+banner *below* the board, where it was easy to miss. It now appears as a card
+**centered on the board**, with the board **dimmed and blurred** behind it —
+matching the codebase's existing overlay pattern (promotion / analysis overlays,
+which already live inside `#board-area`).
+
+- `_resultBanner` is now a `.game-result-overlay` (absolute, `inset: 0`, fl-center,
+  `rgba(0,0,0,0.55)` + `backdrop-filter: blur(4px)`, `z-index: 35`) appended to
+  `#board-area` instead of inserted into `#board-column`; the text lives in an inner
+  `.game-result` card (`dialogSlideIn` entrance, dark glass background). `_showResult`
+  writes the card and flex-shows the overlay; the existing `display='none'` clears in
+  `_startGame` / `_restart` / `_loadGame` are unchanged.
+  *(src/game/GameController.js, src/styles/board.css)*
+
+Verified in-browser (overlay rect matches the board rect exactly, dim + blur
+applied); lint / format / build all green.
+
+Follow-up fix: clicking **Analyze Game** after game over left the dimmed overlay
+covering the board you're trying to review (best-move arrows drew underneath it).
+`_handleAnalyzeClick` now hides `_resultBanner` first — covering both the
+time-picker path and the cached "Best Move" path. Verified in-browser: overlay
+clears on Analyze and the board (with arrows) is fully visible.
+*(src/game/GameController.js)*
+
 ### A1 (Tiers 1–2): GameController decomposition
 
 Began the deferred A1 architecture work via a brainstorm → spec → plan → execute
