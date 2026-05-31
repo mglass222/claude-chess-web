@@ -51,6 +51,10 @@ export class GameController {
 
     // Bound handlers for cleanup
     this._boundKeyboard = (e) => this.historyNavigator.handleKey(e);
+    // Game-over overlay: the next mouse click anywhere dismisses it (armed on a
+    // short delay so the game-ending click itself doesn't). See _armResultDismiss.
+    this._boundResultDismiss = () => this._hideResultOverlay();
+    this._resultDismissTimer = null;
 
     // Tracked timeouts for cleanup
     this._pendingTimeouts = [];
@@ -94,12 +98,16 @@ export class GameController {
     // Player info (below board)
     boardColumn.insertBefore(this._playerInfo, document.getElementById('below-board'));
 
-    // Inline game-over result banner (replaces the old modal overlay), shown
-    // directly under the board on checkmate / draw / resignation / timeout.
+    // Game-over result overlay, centered on the board with the board dimmed and
+    // blurred behind it on checkmate / draw / resignation / timeout. Lives inside
+    // #board-area (like the promotion/analysis overlays) so it tracks the board.
     this._resultBanner = document.createElement('div');
-    this._resultBanner.className = 'game-result';
+    this._resultBanner.className = 'game-result-overlay';
     this._resultBanner.style.display = 'none';
-    boardColumn.insertBefore(this._resultBanner, this._playerInfo);
+    this._resultCard = document.createElement('div');
+    this._resultCard.className = 'game-result';
+    this._resultBanner.appendChild(this._resultCard);
+    boardArea.appendChild(this._resultBanner);
 
     // Chess clocks (each placed on its color's side of the board)
     this.chessClock = new ChessClock(this._playerInfo, this._opponentInfo);
@@ -307,7 +315,7 @@ export class GameController {
   }
 
   _startGame() {
-    this._resultBanner.style.display = 'none';
+    this._hideResultOverlay();
     this.leftPanel.hideAnalyzeButton();
     this.leftPanel.hideTimePicker();
     this.analysisGraph.hide();
@@ -368,7 +376,7 @@ export class GameController {
   _restart() {
     this._cancelTransientGameWork();
     this.chessClock.stop();
-    this._resultBanner.style.display = 'none';
+    this._hideResultOverlay();
     this.leftPanel.hideAnalyzeButton();
     this.leftPanel.hideTimePicker();
     this.analysisGraph.hide();
@@ -633,9 +641,37 @@ export class GameController {
   }
 
   _showResult(reason) {
-    this._resultBanner.textContent = this._gameOverMessage(reason);
-    this._resultBanner.classList.toggle('is-draw', !this.state.winner);
-    this._resultBanner.style.display = 'block';
+    this._resultCard.textContent = this._gameOverMessage(reason);
+    this._resultCard.classList.toggle('is-draw', !this.state.winner);
+    this._resultBanner.style.display = 'flex';
+    this._armResultDismiss();
+  }
+
+  // Hide the game-over overlay and tear down its dismiss handler.
+  _hideResultOverlay() {
+    this._resultBanner.style.display = 'none';
+    this._disarmResultDismiss();
+  }
+
+  // Arm a one-shot "click anywhere dismisses" handler — covers the board, every
+  // left-panel button, and empty window space. Delayed so the click that ended
+  // the game (a board move, Resign) and its trailing synthetic click can't
+  // dismiss the overlay the instant it appears. Capture phase so it runs before
+  // a button's own handler.
+  _armResultDismiss() {
+    this._disarmResultDismiss();
+    this._resultDismissTimer = setTimeout(() => {
+      this._resultDismissTimer = null;
+      document.addEventListener('click', this._boundResultDismiss, true);
+    }, 200);
+  }
+
+  _disarmResultDismiss() {
+    if (this._resultDismissTimer) {
+      clearTimeout(this._resultDismissTimer);
+      this._resultDismissTimer = null;
+    }
+    document.removeEventListener('click', this._boundResultDismiss, true);
   }
 
   // Human-readable game-over message. `reason` is 'timeout' or 'resignation'
@@ -653,6 +689,9 @@ export class GameController {
   }
 
   _handleAnalyzeClick() {
+    // Reviewing the game: dismiss the game-over overlay so the board (and any
+    // best-move arrows drawn on it) is visible behind it.
+    this._hideResultOverlay();
     if (this.state.analysisResults) {
       this._toggleBestMoveArrow();
     } else {
@@ -957,7 +996,7 @@ export class GameController {
         this.history.deserialize(moveData);
       }
       this.boardView.renderPosition(this.state.board, this.state.playerColor);
-      this._resultBanner.style.display = 'none';
+      this._hideResultOverlay();
       this.evalBar.setPlayerColor(this.state.playerColor);
       this.evalBar.reset();
       this.chessClock.hide();
