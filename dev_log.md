@@ -7,6 +7,18 @@ Update this file whenever the program changes.
 
 ## 2026-05-31
 
+### Fix — illegal-move clicks threw an uncaught promise rejection
+
+Clicking an illegal target (e.g. `e5→e6` with a piece selected) logged
+`Uncaught (in promise) Error: Invalid move` and aborted the click handler.
+Root cause: `GameState.makeMove` called `chess.move()` directly, but chess.js v1
+**throws** on an invalid move instead of returning `null` — so the callers'
+existing `if (!result) return; // illegal move` guard was dead code and the throw
+escaped through the `async _executeMove`. `makeMove` now catches and returns
+`null`, honoring the contract its callers already assume. Verified in-browser:
+an illegal click is silently ignored (no error/rejection) and legal moves still
+work. *(src/game/GameState.js)*
+
 ### UX — color-coded moves in the Move History list
 
 After post-game analysis, moves in the Move History list are now tinted to match

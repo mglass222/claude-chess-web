@@ -71,8 +71,13 @@ export class GameState {
   }
 
   makeMove(move) {
-    const result = this.chess.move(move);
-    return result;
+    // chess.js v1 throws on an illegal/invalid move; callers expect a falsy
+    // return instead (they guard with `if (!result)`), so translate the throw.
+    try {
+      return this.chess.move(move);
+    } catch {
+      return null;
+    }
   }
 
   undoMove() {
