@@ -5,6 +5,93 @@ Update this file whenever the program changes.
 
 ---
 
+## 2026-06-12
+
+### Fixes — five verified bugs from a full-codebase review
+
+- **New Game → Cancel no longer soft-locks the game.** `_newGame()` cancels
+  in-flight engine work and stops the clock before showing the dialog, but the
+  cancel path only hid it — leaving the AI's move permanently cancelled (and the
+  clock stopped). New `_cancelNewGame()` resumes the clock and reschedules the AI
+  move / live analysis as the turn requires. Verified in-browser. *(GameController)*
+- **Take Back after loading a save no longer desyncs board and move list.**
+  `GameState.deserialize` now replays the saved SAN history into a fresh Chess
+  instance (falling back to FEN-only load on corrupt data), so `chess.undo()`
+  works after a load — this also restores threefold-repetition detection across
+  save/load. `_takeBack` additionally guards on `undoMove()`'s return so history
+  is never popped without a matching board undo. Verified in-browser. *(GameState,
+  GameController)*
+- **Clock: the 1-second minimum deduction can now flag a player.** The deduction
+  path in `ChessClock.switchTo` clamped to 0 without firing `onTimeOut`, letting a
+  player at 0:00 keep playing until their next turn. It now stops the clock and
+  fires the timeout, and `switchTo` bails if `_flushTick` already flagged the
+  mover (previously it deducted from the wrong side and restarted the clock).
+  *(ChessClock)*
+- **AI-move failures are bounded.** A post-init engine crash (or persistent
+  null/illegal bestmove) used to reschedule `_makeAIMove` every 500ms forever
+  with no feedback. Retries are now capped at 3 — or zero if `engine.ready` is
+  false — then the persistent engine-error banner is shown. *(GameController)*
+- **Post-game analysis is re-entrancy-safe.** Clicking Analyze during a running
+  analysis spawned a second pool that clobbered the first run's shared state
+  (orphaning workers and hiding the live progress UI). `_runPostGameAnalysis` now
+  early-returns while a pool exists, and a run id keeps a cancelled run's tail
+  from touching a newer run. `analyze()` rejections are caught (the overlay no
+  longer sticks), and `AnalysisPool._initOneWorker` resolves a dead slot instead
+  of rejecting the whole `Promise.all` when `new Worker()` throws. *(GameController,
+  AnalysisPool)*
+
+### Accessibility
+
+- Piece `alt` text is now human-readable ("white pawn") for screen readers; the
+  `wP`-style code moved to `data-piece`, which `updatePosition`/`setPieceSet`
+  read instead of `alt`. Promotion-piece images likewise. *(BoardView,
+  PromotionDialog)*
+- Promotion dialog: `role="dialog"` + `aria-modal`, per-piece `aria-label`s,
+  Escape cancels, focus moves to the queen on open and returns to the prior
+  element on close. Cleared via `replaceChildren()`. *(PromotionDialog)*
+- `prefers-reduced-motion` support: global CSS collapse of animations/transitions
+  (including the infinite critical-time clock pulse), and `animateMove` snaps
+  instead of sliding. *(main.css, BoardView)*
+- Contrast bumps for sub-AA text: setup section labels (0.45→0.7 alpha, 10→11px),
+  time-control buttons (0.55→0.75), move numbers (0.35→0.6), empty-move-list
+  text (0.4→0.65). *(panels.css)*
+- History keyboard navigation no longer hijacks Alt/Ctrl/Cmd+Arrow (browser
+  back!) or arrow keys inside focused form controls. *(HistoryNavigator)*
+
+### CodeRabbit review follow-ups (PR #5)
+
+- **AnalysisPool drops dead worker slots.** The earlier hardening resolved a
+  failed `new Worker()` as `{ worker: null }`, but `_analyzeOne` returns null
+  instantly for such a slot, so the scheduler would keep feeding it FENs and one
+  dead slot could null out most of the queue. `_initWorkers` now filters dead
+  slots, `analyze()` bails when none survive, and the kickoff loop iterates the
+  filtered pool. *(AnalysisPool)*
+- **`_aiMoveRetries` resets on take-back and load** so stale failures from a
+  previous position can't trip the engine-error banner early. *(GameController)*
+- **Save-load replay is validated against the saved FEN.** `_replayMoves` now
+  rejects a history that parses but ends on a different position, and on any
+  replay failure `deserialize` returns no history — `_loadGame` then clears the
+  move list (FEN-only load) instead of leaving the previous game's history on
+  screen. Verified in-browser with a deliberately corrupted save. *(GameState,
+  GameController)*
+- Declined (with reasoning on the PR): splitting `GameController` — that's the
+  tracked Tier 3 refactor per the project guide, and this PR shrinks the file.
+
+### Layout fix + dead-code cleanup
+
+- Analysis mode no longer overflows mid-size viewports: the right-panel width is
+  now a `--right-panel-w` variable (240px → 360px in analysis mode) that
+  `#board-area`'s width calc references, instead of a hardcoded 240px. *(main.css)*
+- Removed dead code found by review (all grep-verified unreferenced): the entire
+  `setup.css` file (superseded by the inline new-game setup in panels.css),
+  `.hint-btn`, `.fen-bar`/`.fen-input`/`.copy-btn`, `.analysis-time-section`/
+  `-label`, `.depth-slider-container`, `.eval-score.calculating` CSS rules;
+  `GameController._restart()` (~35 lines, never called, contained latent clock
+  bugs); `GameState.newGame()`, `GameState.isCapture()`, and the vestigial
+  eval-bar animation fields (`targetEvalCp` etc. — EvalBar owns that state).
+
+---
+
 ## 2026-05-31
 
 ### Fix — illegal-move clicks threw an uncaught promise rejection

@@ -87,8 +87,12 @@ body::after {
 }
 
 #game-layout {
+  /* Right-panel width is a variable so #board-area's width calc below tracks
+     the wider analysis-mode panel instead of overflowing the viewport. */
+  --right-panel-w: 240px;
+
   display: grid;
-  grid-template-columns: 220px auto 240px;
+  grid-template-columns: 220px auto var(--right-panel-w);
   justify-content: start;
   gap: 0;
   height: 100vh;
@@ -98,7 +102,7 @@ body::after {
 }
 
 #game-layout.analysis-mode {
-  grid-template-columns: 220px auto 360px;
+  --right-panel-w: 360px;
 }
 
 #left-panel {
@@ -136,7 +140,7 @@ body::after {
 }
 
 #board-area {
-  width: min(calc(100vh - 160px), calc(100vw - 220px - 240px - 40px));
+  width: min(calc(100vh - 160px), calc(100vw - 220px - var(--right-panel-w) - 40px));
   max-width: 100%;
   aspect-ratio: 1;
   position: relative;
@@ -228,10 +232,6 @@ body::after {
     justify-content: center;
     max-width: min(90vw, calc(100vh - 240px));
   }
-  .fen-bar {
-    margin-left: 0;
-    max-width: min(90vw, calc(100vh - 240px));
-  }
 }
 
 /* Responsive — landscape mobile */
@@ -261,9 +261,6 @@ body::after {
   .player-info {
     max-width: min(60vw, calc(100vh - 80px));
     padding: 2px 0;
-  }
-  .fen-bar {
-    max-width: min(60vw, calc(100vh - 80px));
   }
 }
 
@@ -297,6 +294,18 @@ body::after {
 
 .dialog-enter {
   animation: dialogSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Reduced motion: collapse all animations/transitions (incl. the infinite
+   critical-time clock pulse). BoardView.animateMove checks this in JS. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @keyframes dialogSlideIn {

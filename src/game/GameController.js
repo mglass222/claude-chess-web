@@ -48,6 +48,11 @@ export class GameController {
 
     // Analysis cancel flag
     this._cancelAnalysis = false;
+    // Run id so a stale (cancelled) post-game analysis can't touch a newer run
+    this._analysisRunId = 0;
+
+    // Consecutive failed AI move attempts (bounded retry, see _retryAIMoveOrFail)
+    this._aiMoveRetries = 0;
 
     // Bound handlers for cleanup
     this._boundKeyboard = (e) => this.historyNavigator.handleKey(e);
@@ -119,7 +124,7 @@ export class GameController {
     this.settingsDialog = new SettingsDialog();
     this.newGameSetup = new NewGameSetup(this.settings.pieceSet);
     this.newGameSetup.onStart = (opts) => this._startNewGame(opts);
-    this.newGameSetup.onCancel = () => this._hideNewGameSetup();
+    this.newGameSetup.onCancel = () => this._cancelNewGame();
 
     this.leftPanel = new LeftPanel(leftPanel, {
       actions: {
@@ -320,6 +325,7 @@ export class GameController {
     this.leftPanel.hideTimePicker();
     this.analysisGraph.hide();
     this.state.showingBestMove = false;
+    this._aiMoveRetries = 0;
     this.state.resetGame();
     this.state.startGame();
     this.historyNavigator.clearCache();
@@ -373,46 +379,26 @@ export class GameController {
     }
   }
 
-  _restart() {
-    this._cancelTransientGameWork();
-    this.chessClock.stop();
-    this._hideResultOverlay();
-    this.leftPanel.hideAnalyzeButton();
-    this.leftPanel.hideTimePicker();
-    this.analysisGraph.hide();
-    this.state.showingBestMove = false;
-    this.state.resetGame();
-    this.state.playerColor = this.state.lastPlayerColor;
-    this.state.difficulty = this.state.lastDifficulty;
-    this.historyNavigator.clearCache();
-    this.history.clear();
-    this.history.setInitialFen(this.state.fen);
-
-    this.boardView.renderPosition(this.state.board, this.state.playerColor);
-    this.boardView.setSelected(null);
-    this.boardView.setLastMove(null, null);
-    this.boardView.setCheck(null);
-    this.boardView.clearHintArrow();
-    this.evalBar.reset();
-    this.evalBar.setPlayerColor(this.state.playerColor);
-    this.moveList.clear();
-    this.leftPanel.setInGameControlsVisible(true);
-    this.leftPanel.setHintLabel('Hint');
-    this.leftPanel.setTakeBackEnabled(false);
-    this._replayEl.style.display = 'none';
-
-    this.engine.setDifficulty(this.state.difficulty, this.state.moveTime);
-    this._startAnalysis();
-
-    if (this.state.playerColor === 'b') {
-      this._setTimeout(() => this._makeAIMove(), 300);
-    }
-  }
-
   _newGame() {
     this._cancelTransientGameWork();
     this.chessClock.stop();
     this._showNewGameDialog();
+  }
+
+  // Cancelling the New Game dialog must resume the game that _newGame() paused:
+  // it cancelled in-flight engine work (including a pending AI move) and stopped
+  // the clock, so restart whichever of those the current turn needs.
+  _cancelNewGame() {
+    this._hideNewGameSetup();
+    if (this.state.phase !== 'playing') return;
+    if (this.chessClock.isActive) {
+      this.chessClock.startClock(this.state.turn);
+    }
+    if (this.state.isPlayerTurn) {
+      this._startAnalysis();
+    } else {
+      this._setTimeout(() => this._makeAIMove(), 300);
+    }
   }
 
   // --- Move Handling ---
@@ -567,8 +553,7 @@ export class GameController {
       return;
     }
     if (!moveUci || moveUci === '(none)') {
-      console.warn('Engine failed to produce a move, retrying...');
-      this._setTimeout(() => this._makeAIMove(), 500);
+      this._retryAIMoveOrFail('Engine failed to produce a move');
       return;
     }
 
@@ -582,10 +567,10 @@ export class GameController {
 
     const result = this.state.makeMove(moveObj);
     if (!result) {
-      console.warn('Engine produced illegal move:', moveUci, 'retrying...');
-      this._setTimeout(() => this._makeAIMove(), 500);
+      this._retryAIMoveOrFail(`Engine produced illegal move: ${moveUci}`);
       return;
     }
+    this._aiMoveRetries = 0;
 
     // Play sound
     if (this.state.isCheck()) {
@@ -623,6 +608,20 @@ export class GameController {
 
     // Restart analysis
     this._startAnalysis();
+  }
+
+  // A failed AI move is retried a few times, but a dead engine (post-init worker
+  // crash makes engine.ready false) or persistent failure must surface an error
+  // instead of rescheduling _makeAIMove every 500ms forever.
+  _retryAIMoveOrFail(why) {
+    if (!this.engine.ready || this._aiMoveRetries >= 3) {
+      console.error(`${why} — giving up`);
+      this._showEngineError();
+      return;
+    }
+    this._aiMoveRetries++;
+    console.warn(`${why}, retrying...`);
+    this._setTimeout(() => this._makeAIMove(), 500);
   }
 
   _handleGameOver(reason) {
@@ -725,6 +724,8 @@ export class GameController {
       return;
     }
 
+    if (this._analysisPool) return; // a run is already in progress
+
     this.engine.stopAnalysis();
     this._cancelAnalysis = false;
 
@@ -733,14 +734,28 @@ export class GameController {
     const moves = this.history.moves;
     const fens = moves.map((m) => m.fen);
 
-    // Use parallel worker pool for analysis
-    this._analysisPool = new AnalysisPool();
+    // Use a parallel worker pool for analysis. The run id guards the tail of
+    // this method: cancelling nulls _analysisPool, which lets a new run start
+    // while this one's await is still settling — the stale run must not touch
+    // the new run's pool, results, or progress UI.
+    const runId = ++this._analysisRunId;
+    const pool = new AnalysisPool();
+    this._analysisPool = pool;
 
-    const results = await this._analysisPool.analyze(fens, movetime, (completed, total) =>
-      this.analysisGraph.updateProgress(completed, total)
-    );
+    let results = null;
+    try {
+      results = await pool.analyze(fens, movetime, (completed, total) => {
+        if (runId === this._analysisRunId) this.analysisGraph.updateProgress(completed, total);
+      });
+    } catch (e) {
+      // Worker construction can throw (e.g. CSP) — surface as a failed run
+      // instead of leaving the progress overlay stuck and the pool dangling.
+      console.error('Post-game analysis failed:', e);
+      pool.cancel();
+    }
 
-    this._analysisPool = null;
+    if (this._analysisPool === pool) this._analysisPool = null;
+    if (runId !== this._analysisRunId) return;
 
     if (!results || this._cancelAnalysis) {
       this.analysisGraph.hide();
@@ -780,13 +795,17 @@ export class GameController {
     // an AI move that resolves mid-take-back can't be applied to the now-undone
     // position (the session guards in _makeAIMove will bail).
     this._cancelTransientGameWork();
+    this._aiMoveRetries = 0; // failures on the old position don't count here
 
     // Determine how many half-moves to undo
     const undoCount = this.state.isPlayerTurn ? 2 : 1;
 
     for (let i = 0; i < undoCount; i++) {
       if (this.history.length === 0) break;
-      this.state.undoMove();
+      // chess.js undo() returns null when its internal history is empty (e.g. a
+      // save restored from FEN alone) — popping our history anyway would desync
+      // the move list from the board.
+      if (!this.state.undoMove()) break;
       this.history.removeLast();
     }
 
@@ -990,12 +1009,18 @@ export class GameController {
     }
     try {
       this._cancelTransientGameWork();
+      this._aiMoveRetries = 0; // failures on the old position don't count here
       this.chessClock.stop();
       this.historyNavigator.clearCache();
       const data = JSON.parse(raw);
       const moveData = this.state.deserialize(data);
       if (moveData) {
         this.history.deserialize(moveData);
+      } else {
+        // FEN-only fallback (missing/corrupt saved history) — drop whatever
+        // history the previous game left behind so the move list matches.
+        this.history.clear();
+        this.history.setInitialFen(this.state.fen);
       }
       this.boardView.renderPosition(this.state.board, this.state.playerColor);
       this._hideResultOverlay();
