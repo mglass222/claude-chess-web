@@ -58,6 +58,25 @@ Update this file whenever the program changes.
 - History keyboard navigation no longer hijacks Alt/Ctrl/Cmd+Arrow (browser
   back!) or arrow keys inside focused form controls. *(HistoryNavigator)*
 
+### CodeRabbit review follow-ups (PR #5)
+
+- **AnalysisPool drops dead worker slots.** The earlier hardening resolved a
+  failed `new Worker()` as `{ worker: null }`, but `_analyzeOne` returns null
+  instantly for such a slot, so the scheduler would keep feeding it FENs and one
+  dead slot could null out most of the queue. `_initWorkers` now filters dead
+  slots, `analyze()` bails when none survive, and the kickoff loop iterates the
+  filtered pool. *(AnalysisPool)*
+- **`_aiMoveRetries` resets on take-back and load** so stale failures from a
+  previous position can't trip the engine-error banner early. *(GameController)*
+- **Save-load replay is validated against the saved FEN.** `_replayMoves` now
+  rejects a history that parses but ends on a different position, and on any
+  replay failure `deserialize` returns no history — `_loadGame` then clears the
+  move list (FEN-only load) instead of leaving the previous game's history on
+  screen. Verified in-browser with a deliberately corrupted save. *(GameState,
+  GameController)*
+- Declined (with reasoning on the PR): splitting `GameController` — that's the
+  tracked Tier 3 refactor per the project guide, and this PR shrinks the file.
+
 ### Layout fix + dead-code cleanup
 
 - Analysis mode no longer overflows mid-size viewports: the right-panel width is

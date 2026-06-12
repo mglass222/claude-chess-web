@@ -41,6 +41,7 @@ export class AnalysisPool {
       this._destroyWorkers();
       return null;
     }
+    if (this._workers.length === 0) return null;
 
     const results = new Array(fens.length).fill(null);
     let completed = 0;
@@ -81,7 +82,7 @@ export class AnalysisPool {
       };
 
       // Kick off one job per worker
-      for (let w = 0; w < workerCount; w++) {
+      for (let w = 0; w < this._workers.length; w++) {
         assignNext(w);
       }
     });
@@ -107,7 +108,10 @@ export class AnalysisPool {
     for (let i = 0; i < count; i++) {
       promises.push(this._initOneWorker(url));
     }
-    this._workers = await Promise.all(promises);
+    // Drop dead slots (failed Worker construction): _analyzeOne resolves null
+    // for them instantly, so a dead slot left in the pool would race through
+    // the queue nulling out positions the live workers never get to analyze.
+    this._workers = (await Promise.all(promises)).filter((w) => w.worker);
   }
 
   _initOneWorker(url) {

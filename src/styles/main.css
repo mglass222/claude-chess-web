@@ -90,6 +90,7 @@ body::after {
   /* Right-panel width is a variable so #board-area's width calc below tracks
      the wider analysis-mode panel instead of overflowing the viewport. */
   --right-panel-w: 240px;
+
   display: grid;
   grid-template-columns: 220px auto var(--right-panel-w);
   justify-content: start;

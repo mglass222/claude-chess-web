@@ -795,6 +795,7 @@ export class GameController {
     // an AI move that resolves mid-take-back can't be applied to the now-undone
     // position (the session guards in _makeAIMove will bail).
     this._cancelTransientGameWork();
+    this._aiMoveRetries = 0; // failures on the old position don't count here
 
     // Determine how many half-moves to undo
     const undoCount = this.state.isPlayerTurn ? 2 : 1;
@@ -1008,12 +1009,18 @@ export class GameController {
     }
     try {
       this._cancelTransientGameWork();
+      this._aiMoveRetries = 0; // failures on the old position don't count here
       this.chessClock.stop();
       this.historyNavigator.clearCache();
       const data = JSON.parse(raw);
       const moveData = this.state.deserialize(data);
       if (moveData) {
         this.history.deserialize(moveData);
+      } else {
+        // FEN-only fallback (missing/corrupt saved history) — drop whatever
+        // history the previous game left behind so the move list matches.
+        this.history.clear();
+        this.history.setInitialFen(this.state.fen);
       }
       this.boardView.renderPosition(this.state.board, this.state.playerColor);
       this._hideResultOverlay();

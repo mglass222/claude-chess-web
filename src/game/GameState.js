@@ -124,8 +124,11 @@ export class GameState {
   deserialize(data) {
     // Rebuild chess.js's internal move history by replaying the saved moves —
     // a bare load(fen) restores the position but leaves undo() and threefold-
-    // repetition detection with no history to work from.
-    if (!this._replayMoves(data.moveHistory)) {
+    // repetition detection with no history to work from. When replay fails
+    // (corrupt save), fall back to FEN-only and drop the history entirely:
+    // returning an unreplayable move list would desync it from the board.
+    const replayed = this._replayMoves(data.moveHistory, data.fen);
+    if (!replayed) {
       this.chess.load(data.fen);
     }
     this.playerColor = data.playerColor;
@@ -138,19 +141,21 @@ export class GameState {
     this.lastPlayerColor = this.playerColor;
     this.lastDifficulty = this.difficulty;
     this.checkGameOver();
-    return data.moveHistory || null;
+    return replayed ? data.moveHistory : null;
   }
 
   // Replay a serialized MoveHistory ([{ san, fen }], entry 0 = initial position)
   // into a fresh Chess instance. Returns false (leaving this.chess untouched) on
-  // missing or corrupt data so the caller can fall back to a FEN-only load.
-  _replayMoves(moveData) {
+  // missing or corrupt data — including a replay that parses but doesn't end on
+  // the saved position — so the caller can fall back to a FEN-only load.
+  _replayMoves(moveData, expectedFen) {
     if (!moveData || moveData.length === 0 || !moveData[0].fen) return false;
     try {
       const chess = new Chess(moveData[0].fen);
       for (const m of moveData.slice(1)) {
         chess.move(m.san);
       }
+      if (chess.fen() !== expectedFen) return false;
       this.chess = chess;
       return true;
     } catch {
