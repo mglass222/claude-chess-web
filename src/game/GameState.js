@@ -25,18 +25,6 @@ export class GameState {
     // Analysis state
     this.analyzing = false;
     this.evaluation = null; // { cp, mate, depth }
-    this.analysisInfo = null;
-    this.draggingDepthSlider = false;
-
-    // Eval bar animation
-    this.targetEvalCp = 0;
-    this.currentEvalCp = 0;
-    this.targetIsMate = false;
-    this.targetMateIn = null;
-    this.currentIsMate = false;
-    this.currentMateIn = null;
-    this.evalAnimStart = 0;
-    this.evalAnimating = false;
 
     // Post-game analysis results: { evaluations: number[], movetime: number } or null
     this.analysisResults = null;
@@ -84,11 +72,6 @@ export class GameState {
     return this.chess.undo();
   }
 
-  isCapture(move) {
-    // move is a verbose move object from chess.js
-    return move.captured !== undefined;
-  }
-
   isCheck() {
     return this.chess.inCheck();
   }
@@ -113,30 +96,6 @@ export class GameState {
     this.lastDifficulty = this.difficulty;
   }
 
-  newGame() {
-    this.chess.reset();
-    this.playerColor = DEFAULTS.playerColor;
-    this.difficulty = DEFAULTS.difficulty;
-    this.phase = 'setup';
-    this.winner = null;
-    this.showingPromotion = false;
-    this.promotionSquare = null;
-    this.promotionFrom = null;
-    this.showingHint = false;
-    this.bestMove = null;
-    this.analyzing = false;
-    this.evaluation = null;
-    this.analysisInfo = null;
-    this.analysisResults = null;
-    this.targetEvalCp = 0;
-    this.currentEvalCp = 0;
-    this.evalAnimating = false;
-    this.targetIsMate = false;
-    this.targetMateIn = null;
-    this.currentIsMate = false;
-    this.currentMateIn = null;
-  }
-
   resetGame() {
     this.chess.reset();
     this.phase = 'playing';
@@ -146,15 +105,7 @@ export class GameState {
     this.bestMove = null;
     this.analyzing = false;
     this.evaluation = null;
-    this.analysisInfo = null;
     this.analysisResults = null;
-    this.targetEvalCp = 0;
-    this.currentEvalCp = 0;
-    this.evalAnimating = false;
-    this.targetIsMate = false;
-    this.targetMateIn = null;
-    this.currentIsMate = false;
-    this.currentMateIn = null;
   }
 
   // Serialization for save/load
@@ -171,7 +122,12 @@ export class GameState {
   }
 
   deserialize(data) {
-    this.chess.load(data.fen);
+    // Rebuild chess.js's internal move history by replaying the saved moves —
+    // a bare load(fen) restores the position but leaves undo() and threefold-
+    // repetition detection with no history to work from.
+    if (!this._replayMoves(data.moveHistory)) {
+      this.chess.load(data.fen);
+    }
     this.playerColor = data.playerColor;
     this.difficulty = data.difficulty;
     this.timeControl = data.timeControl ?? 0;
@@ -183,5 +139,22 @@ export class GameState {
     this.lastDifficulty = this.difficulty;
     this.checkGameOver();
     return data.moveHistory || null;
+  }
+
+  // Replay a serialized MoveHistory ([{ san, fen }], entry 0 = initial position)
+  // into a fresh Chess instance. Returns false (leaving this.chess untouched) on
+  // missing or corrupt data so the caller can fall back to a FEN-only load.
+  _replayMoves(moveData) {
+    if (!moveData || moveData.length === 0 || !moveData[0].fen) return false;
+    try {
+      const chess = new Chess(moveData[0].fen);
+      for (const m of moveData.slice(1)) {
+        chess.move(m.san);
+      }
+      this.chess = chess;
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

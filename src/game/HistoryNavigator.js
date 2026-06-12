@@ -65,6 +65,15 @@ export class HistoryNavigator {
   handleKey(e) {
     if (this._state.phase === 'setup') return;
     if (this._history.length === 0) return;
+    // Leave browser/OS shortcuts (Alt+Left = back, Cmd+Left = line start) and
+    // focused form controls alone — preventDefault below would swallow them.
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (
+      e.target instanceof Element &&
+      e.target.closest('input, select, textarea, [contenteditable]')
+    ) {
+      return;
+    }
 
     switch (e.key) {
       case 'ArrowLeft':

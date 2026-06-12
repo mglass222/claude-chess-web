@@ -37,8 +37,8 @@
 }
 
 .setup-section-label {
-  font-size: 10px;
-  color: rgba(212, 208, 200, 0.45);
+  font-size: 11px;
+  color: rgba(212, 208, 200, 0.7);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -151,7 +151,7 @@
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: var(--btn-radius);
   background: transparent;
-  color: rgba(212, 208, 200, 0.55);
+  color: rgba(212, 208, 200, 0.75);
   font-family: var(--font-body);
   font-size: 12px;
   font-weight: 500;
@@ -316,12 +316,6 @@
   color: #1a1510;
 }
 
-.eval-score.calculating {
-  top: 50%;
-  transform: translateY(-50%);
-  color: #888;
-}
-
 .eval-ticks {
   position: absolute;
   top: 0;
@@ -376,7 +370,7 @@
 }
 
 .move-list-empty {
-  color: rgba(212, 208, 200, 0.4);
+  color: rgba(212, 208, 200, 0.65);
   text-align: center;
   padding: 24px 0;
   font-size: 13px;
@@ -398,7 +392,7 @@
 }
 
 .move-number {
-  color: rgba(212, 208, 200, 0.35);
+  color: rgba(212, 208, 200, 0.6);
   font-weight: 600;
   text-align: right;
   padding-right: 6px;
@@ -572,64 +566,6 @@
   color: #dc503c;
 }
 
-/* FEN Bar (below board) */
-.fen-bar {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  width: 100%;
-  margin-left: 52px; /* align with board (eval bar width + gap) */
-  max-width: min(80vh, 700px);
-}
-
-.fen-input {
-  flex: 1;
-  min-width: 0;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--glass-border);
-  border-radius: 4px;
-  color: var(--panel-text);
-  font-family: monospace;
-  font-size: 11px;
-  padding: 6px 8px;
-  outline: none;
-}
-
-.fen-input-wide {
-  font-size: 12px;
-  padding: 5px 10px;
-}
-
-.fen-input:focus {
-  border-color: var(--accent);
-}
-
-.copy-btn {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--panel-text);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--btn-radius);
-  padding: 4px 10px;
-  font-family: var(--font-body);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition-medium);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.copy-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: var(--accent);
-}
-
-.copy-btn.copied {
-  background: rgba(0, 180, 80, 0.2);
-  border-color: #00b450;
-  color: #00e064;
-}
-
 .pgn-btn {
   margin-top: 36px;
   padding: 8px 12px;
@@ -727,20 +663,6 @@
 }
 
 /* Analysis Time Selection */
-.analysis-time-section {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-}
-
-.analysis-time-label {
-  font-family: var(--font-body);
-  font-size: 14px;
-  color: rgba(212, 208, 200, 0.6);
-  font-weight: 500;
-}
-
 .analysis-time-options {
   display: flex;
   gap: 5px;
@@ -838,10 +760,6 @@
   .fen-btn,
   .settings-btn {
     margin-top: 0;
-  }
-  .depth-slider-container {
-    width: 200px;
-    padding: 4px 8px;
   }
   .eval-bar {
     width: 30px;

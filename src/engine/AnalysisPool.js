@@ -112,7 +112,16 @@ export class AnalysisPool {
 
   _initOneWorker(url) {
     return new Promise((resolve) => {
-      const worker = new Worker(url);
+      let worker;
+      try {
+        worker = new Worker(url);
+      } catch (_) {
+        // Worker construction can throw synchronously (e.g. CSP). Resolve with
+        // a dead slot — _analyzeOne yields null for it — rather than rejecting
+        // the whole Promise.all in _initWorkers.
+        resolve({ worker: null, handler: null });
+        return;
+      }
       let gotUciOk = false;
 
       const onMsg = (e) => {

@@ -170,31 +170,6 @@
   pointer-events: none;
 }
 
-/* Hint button */
-.hint-btn {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--panel-text);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--btn-radius);
-  padding: 10px 32px;
-  font-family: var(--font-body);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition-medium);
-}
-
-.hint-btn:hover {
-  transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.1);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.hint-btn:active {
-  transform: translateY(0);
-}
-
 /* Replay controls */
 .replay-controls {
   display: flex;

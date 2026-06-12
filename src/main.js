@@ -2,7 +2,6 @@ import './styles/main.css';
 import './styles/board.css';
 import './styles/panels.css';
 import './styles/dialogs.css';
-import './styles/setup.css';
 
 import { GameController } from './game/GameController.js';
 

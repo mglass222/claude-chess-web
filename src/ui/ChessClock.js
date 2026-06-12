@@ -143,17 +143,28 @@ export class ChessClock {
   switchTo(newActiveColor) {
     if (this._running) {
       this._flushTick();
+      // _flushTick may have flagged the mover and stopped the clock — don't
+      // deduct from the (now-unset) running side or restart a finished game.
+      if (!this._running) return;
 
       // Enforce minimum 1 second deducted per move
       const minDeduction = 1000;
       if (this._moveElapsed < minDeduction) {
         const shortfall = minDeduction - this._moveElapsed;
-        if (this._running === 'w') {
+        const mover = this._running;
+        if (mover === 'w') {
           this._timeWhite = Math.max(0, this._timeWhite - shortfall);
-          this._updateDisplay('w');
         } else {
           this._timeBlack = Math.max(0, this._timeBlack - shortfall);
-          this._updateDisplay('b');
+        }
+        this._updateDisplay(mover);
+        // The deduction can flag the mover, just like a normal tick — a player
+        // at 0:00 must lose now, not play on until their next turn.
+        const remaining = mover === 'w' ? this._timeWhite : this._timeBlack;
+        if (remaining <= 0) {
+          this.stop();
+          if (this.onTimeOut) this.onTimeOut(mover);
+          return;
         }
       }
     }

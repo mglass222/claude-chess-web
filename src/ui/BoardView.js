@@ -2,6 +2,7 @@ import { THEMES, ANIMATION_DURATION, ANNOTATION_COLORS } from '../config.js';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['1', '2', '3', '4', '5', '6', '7', '8'];
+const PIECE_NAMES = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
 
 export class BoardView {
   constructor(container) {
@@ -139,7 +140,10 @@ export class BoardView {
     img.src = `${import.meta.env.BASE_URL}pieces/${this.pieceSet}/${pieceCode}.svg`;
     img.className = 'piece';
     img.draggable = false;
-    img.alt = pieceCode;
+    // The piece code is app state (read back in updatePosition/setPieceSet);
+    // alt is for screen readers only.
+    img.dataset.piece = pieceCode;
+    img.alt = `${color === 'w' ? 'white' : 'black'} ${PIECE_NAMES[type]}`;
 
     this.squares[square].appendChild(img);
     this.pieces[square] = img;
@@ -163,8 +167,7 @@ export class BoardView {
     const current = {};
     for (const sq in this.pieces) {
       if (this.pieces[sq]) {
-        const alt = this.pieces[sq].alt; // stored as "wP", "bK", etc.
-        current[sq] = alt;
+        current[sq] = this.pieces[sq].dataset.piece;
       }
     }
 
@@ -190,6 +193,13 @@ export class BoardView {
   // Animate a piece from one square to another, returns a Promise
   animateMove(from, to, board) {
     return new Promise((resolve) => {
+      // Respect reduced-motion: snap to the final position instead of sliding.
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        this.updatePosition(board);
+        resolve();
+        return;
+      }
+
       this._animating = true;
       this._animationResolve = resolve;
 
@@ -660,8 +670,8 @@ export class BoardView {
     // Refresh all pieces on the board
     for (const sq in this.pieces) {
       if (this.pieces[sq]) {
-        const alt = this.pieces[sq].alt; // e.g. "wP", "bK"
-        this.pieces[sq].src = `${import.meta.env.BASE_URL}pieces/${this.pieceSet}/${alt}.svg`;
+        const code = this.pieces[sq].dataset.piece; // e.g. "wP", "bK"
+        this.pieces[sq].src = `${import.meta.env.BASE_URL}pieces/${this.pieceSet}/${code}.svg`;
       }
     }
   }
