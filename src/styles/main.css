@@ -276,10 +276,14 @@ body::after {
   #game-layout.analysis-mode {
     grid-template-columns: 120px 1fr 150px;
     grid-template-rows: none;
-    height: 100vh;
+    /* --app-height (set from window.innerHeight in JS) is the real viewport
+       height; dvh is the pre-script fallback. iOS doesn't recompute dvh on
+       rotation, so the variable is what keeps the board from clipping after a
+       portrait→landscape flip without a reload. */
     height: 100dvh;
-    max-height: 100vh;
+    height: var(--app-height, 100dvh);
     max-height: 100dvh;
+    max-height: var(--app-height, 100dvh);
     min-height: 0;
   }
   #left-panel {
@@ -341,8 +345,8 @@ body::after {
      Width term: viewport minus left panel 120px + right panel 150px +
      eval bar ~24px + player-name column up to 120px + column gaps ≈ 440px. */
   #board-area {
-    width: min(calc(100vh - 14px), calc(100vw - 440px));
     width: min(calc(100dvh - 14px), calc(100vw - 440px));
+    width: min(calc(var(--app-height, 100dvh) - 14px), calc(100vw - 440px));
   }
 }
 
