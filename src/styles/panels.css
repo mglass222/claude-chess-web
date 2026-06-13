@@ -761,6 +761,27 @@
   .settings-btn {
     margin-top: 0;
   }
+  /* Responsive .player-info overrides must live in this file: panels.css
+     loads after main.css, so its desktop .player-info rule above would win
+     the cascade over same-specificity media rules placed there. Span the
+     full board width (the centered column would otherwise shrink-wrap the
+     banner) so the name sits left and the absolute clock at right:0 clears it. */
+  .player-info {
+    width: 100%;
+    margin-left: 0;
+    max-width: min(90vw, calc(100vh - 240px));
+  }
+  /* The clock's vh-based sizing tracks the desktop board, which scales with
+     viewport height — but in portrait the board is width-constrained, so vh
+     units balloon the clock. Use fixed compact sizes instead. */
+  .player-info .chess-clock {
+    min-width: 0;
+    padding: 3px 12px;
+    border-radius: 6px;
+  }
+  .chess-clock-digits {
+    font-size: 18px;
+  }
   .eval-bar {
     width: 30px;
   }
@@ -780,6 +801,10 @@
   }
   .eval-bar {
     width: 24px;
+  }
+  .player-info {
+    max-width: min(60vw, calc(100vh - 80px));
+    padding: 2px 0;
   }
 }
 
