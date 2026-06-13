@@ -313,10 +313,11 @@ body::after {
     column-gap: 10px;
     align-items: stretch;
     justify-content: center;
-    /* Leave clearance at the bottom for the phone's home indicator / browser
-       chrome so the board and the lower clock aren't clipped. env() resolves
-       to 0 without viewport-fit=cover, so the 16px floor always applies. */
-    padding: 6px 0 max(16px, env(safe-area-inset-bottom));
+    /* A small fixed bottom gap. We intentionally do NOT reserve the full
+       safe-area inset here — on iOS that pushed the board ~21px up, which read
+       as too much empty space; the home indicator is a translucent overlay, so
+       a small gap reads better. */
+    padding: 6px 0 8px;
   }
   #board-row {
     grid-area: board;
@@ -335,13 +336,13 @@ body::after {
     min-height: 0;
     padding: 0;
   }
-  /* Height term: viewport minus #board-column's vertical padding (6px top +
-     the safe-area-aware bottom clearance above).
+  /* Height term: viewport minus #board-column's vertical padding (6px top + 8px
+     bottom = 14px).
      Width term: viewport minus left panel 120px + right panel 150px +
      eval bar ~24px + player-name column up to 120px + column gaps ≈ 440px. */
   #board-area {
-    width: min(calc(100vh - 6px - max(16px, env(safe-area-inset-bottom))), calc(100vw - 440px));
-    width: min(calc(100dvh - 6px - max(16px, env(safe-area-inset-bottom))), calc(100vw - 440px));
+    width: min(calc(100vh - 14px), calc(100vw - 440px));
+    width: min(calc(100dvh - 14px), calc(100vw - 440px));
   }
 }
 
