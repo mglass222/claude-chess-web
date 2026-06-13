@@ -23,7 +23,7 @@ applies at a time.
 
 Three columns, board maximized to the viewport height (mockup v3):
 
-```
+```text
 +---------+--------------------+-----------+
 | New     | |  BOARD  | Stockf.| Moves     |
 | Back    | |  fills  |        | 1. e4  e5 |

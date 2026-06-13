@@ -282,7 +282,9 @@ body::after {
   #game-layout.analysis-mode {
     grid-template-columns: 120px 1fr 150px;
     grid-template-rows: none;
+    height: 100vh;
     height: 100dvh;
+    max-height: 100vh;
     max-height: 100dvh;
     min-height: 0;
   }
@@ -333,7 +335,11 @@ body::after {
     min-height: 0;
     padding: 0;
   }
+  /* Height term: viewport minus #board-column's vertical padding (~24px).
+     Width term: viewport minus left panel 120px + right panel 150px +
+     eval bar ~24px + player-name column up to 120px + column gaps ≈ 440px. */
   #board-area {
+    width: min(calc(100vh - 24px), calc(100vw - 440px));
     width: min(calc(100dvh - 24px), calc(100vw - 440px));
   }
 }
