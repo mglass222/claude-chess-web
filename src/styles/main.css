@@ -227,11 +227,6 @@ body::after {
     min-height: 44px;
     padding: 6px 0;
   }
-  .player-info {
-    margin-left: 0;
-    justify-content: center;
-    max-width: min(90vw, calc(100vh - 240px));
-  }
 }
 
 /* Responsive — landscape, taller than a phone (phone landscape has its own
@@ -257,10 +252,6 @@ body::after {
   }
   #below-board {
     min-height: 32px;
-    padding: 2px 0;
-  }
-  .player-info {
-    max-width: min(60vw, calc(100vh - 80px));
     padding: 2px 0;
   }
 }

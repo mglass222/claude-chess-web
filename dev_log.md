@@ -7,6 +7,19 @@ Update this file whenever the program changes.
 
 ## 2026-06-13
 
+### Fix — portrait clocks no longer overlap the player names
+
+In portrait timed games the clock (absolutely positioned at `right: 0`) sat on
+top of the player name. Root cause was a cascade bug, not a layout one: the
+responsive `.player-info` overrides lived in `main.css`, but `panels.css` loads
+*after* `main.css`, so its desktop `.player-info` rule (same specificity, later
+in the cascade — media queries add none) silently won. Those overrides had
+never applied. Moved them into `panels.css`'s own media blocks (portrait gets
+`width: 100%` so the banner spans the board instead of shrink-wrapping around
+the centered name — avatar + name now sit left, clock right) and deleted the
+dead copies in `main.css`. Verified at 390×844 (no overlap, no clipping), plus
+phone-landscape and desktop regressions.
+
 ### Feature — phone-landscape layout (3-column mini-desktop)
 
 On a phone held sideways the app previously kept the portrait stack: button row
