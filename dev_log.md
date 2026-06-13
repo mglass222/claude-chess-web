@@ -5,6 +5,39 @@ Update this file whenever the program changes.
 
 ---
 
+## 2026-06-13
+
+### Feature — phone-landscape layout (3-column mini-desktop)
+
+On a phone held sideways the app previously kept the portrait stack: button row
+on top, board cut off below the fold, move list off-screen, right half of the
+viewport empty. A new CSS-only mode — `@media (orientation: landscape) and
+(max-height: 500px)` — now lays the screen out as three columns: a compact
+120px button column on the left, the board maximized to the viewport height in
+the middle (eval bar beside it), and a full-height scrollable 150px move list
+on the right.
+
+- The player banners + clocks move from above/below the board into a slim
+  column on its right (opponent top, player bottom) via `grid-template-areas`
+  on `#board-column`, targeting the existing `.player-info.opponent/.player`
+  classes — no JS or DOM changes anywhere.
+- Board size: `min(calc(100dvh - 24px), calc(100vw - 440px))`; page overflow
+  hidden, so nothing scrolls off-screen.
+- The two pre-existing `(max-width: 1000px) and (orientation: landscape)`
+  blocks gained `and (min-height: 501px)` so exactly one landscape mode
+  applies at a time; tablets and desktops are untouched.
+- New Game setup / Settings stay in the (scrollable) left column; the time
+  grid drops to 2 columns and the color kings shrink to fit 120px.
+- Verified via Playwright at 844×390 and 667×375 (board fully visible, no
+  page scroll, timed-game clocks beside the board, setup usable) plus
+  desktop 1440×900 and portrait 390×844 regressions.
+- Design spec: `docs/superpowers/specs/2026-06-13-phone-landscape-layout-design.md`.
+- Known pre-existing issue (unchanged): in *portrait* timed games the
+  absolute-positioned clock can overlap the centered player name on narrow
+  screens.
+
+---
+
 ## 2026-06-12
 
 ### Fixes — five verified bugs from a full-codebase review
