@@ -20,6 +20,12 @@ the centered name — avatar + name now sit left, clock right) and deleted the
 dead copies in `main.css`. Verified at 390×844 (no overlap, no clipping), plus
 phone-landscape and desktop regressions.
 
+Follow-up: the clocks themselves were oversized in portrait — their `vh`-based
+sizing tracks the height-scaled desktop board, but the portrait board is
+width-constrained, so `min(3vh, 26px)` digits hit near-maximum on a tall phone.
+The portrait block now uses fixed compact sizes (18px digits, content-width
+pill) instead.
+
 ### Feature — phone-landscape layout (3-column mini-desktop)
 
 On a phone held sideways the app previously kept the portrait stack: button row

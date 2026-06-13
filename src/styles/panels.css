@@ -771,6 +771,17 @@
     margin-left: 0;
     max-width: min(90vw, calc(100vh - 240px));
   }
+  /* The clock's vh-based sizing tracks the desktop board, which scales with
+     viewport height — but in portrait the board is width-constrained, so vh
+     units balloon the clock. Use fixed compact sizes instead. */
+  .player-info .chess-clock {
+    min-width: 0;
+    padding: 3px 12px;
+    border-radius: 6px;
+  }
+  .chess-clock-digits {
+    font-size: 18px;
+  }
   .eval-bar {
     width: 30px;
   }
