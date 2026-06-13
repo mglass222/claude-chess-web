@@ -7,6 +7,22 @@ Update this file whenever the program changes.
 
 ## 2026-06-13
 
+### Fix — phone-landscape bottom clearance (home indicator / browser chrome)
+
+In phone-landscape the board filled the full viewport height, so its bottom
+edge — and the lower clock beside it — was clipped by the phone's home
+indicator / browser chrome. Added bottom clearance: `#board-column` now pads
+its bottom by `max(16px, env(safe-area-inset-bottom))` and the board's height
+term subtracts the same, so the board shrinks slightly and both it and the
+bottom clock sit above the unsafe zone. The landscape side panels (button
+column, move list) get matching safe-area bottom padding. Enabled the insets
+with `viewport-fit=cover` in the viewport meta (without it `env()` is 0 on
+iOS); guarded the portrait stack against the cover change by padding
+`#right-panel`'s bottom with `max(12px, env(safe-area-inset-bottom))`.
+`env()` falls back to the fixed floors on browsers/devices without insets.
+Verified at 844×390 (16px bottom gap, no clipping, no page scroll) and
+portrait 390×844 (no regression).
+
 ### Fix — portrait clocks no longer overlap the player names
 
 In portrait timed games the clock (absolutely positioned at `right: 0`) sat on
