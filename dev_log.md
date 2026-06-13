@@ -12,9 +12,9 @@ Update this file whenever the program changes.
 In phone-landscape the board filled the full viewport height, so its bottom
 edge — and the lower clock beside it — was clipped by the phone's home
 indicator / browser chrome. Added bottom clearance: `#board-column` now pads
-its bottom by `max(16px, env(safe-area-inset-bottom))` and the board's height
+its bottom by `max(24px, env(safe-area-inset-bottom))` and the board's height
 term subtracts the same, so the board shrinks slightly and both it and the
-bottom clock sit above the unsafe zone. The landscape side panels (button
+bottom clock sit above the unsafe zone (top gap 6px, bottom gap ≥24px). The landscape side panels (button
 column, move list) get matching safe-area bottom padding. Enabled the insets
 with `viewport-fit=cover` in the viewport meta (without it `env()` is 0 on
 iOS); guarded the portrait stack against the cover change by padding

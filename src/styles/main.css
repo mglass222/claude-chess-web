@@ -315,8 +315,8 @@ body::after {
     justify-content: center;
     /* Leave clearance at the bottom for the phone's home indicator / browser
        chrome so the board and the lower clock aren't clipped. env() resolves
-       to 0 without viewport-fit=cover, so the 16px floor always applies. */
-    padding: 6px 0 max(16px, env(safe-area-inset-bottom));
+       to 0 without viewport-fit=cover, so the 24px floor always applies. */
+    padding: 6px 0 max(24px, env(safe-area-inset-bottom));
   }
   #board-row {
     grid-area: board;
@@ -340,8 +340,8 @@ body::after {
      Width term: viewport minus left panel 120px + right panel 150px +
      eval bar ~24px + player-name column up to 120px + column gaps ≈ 440px. */
   #board-area {
-    width: min(calc(100vh - 6px - max(16px, env(safe-area-inset-bottom))), calc(100vw - 440px));
-    width: min(calc(100dvh - 6px - max(16px, env(safe-area-inset-bottom))), calc(100vw - 440px));
+    width: min(calc(100vh - 6px - max(24px, env(safe-area-inset-bottom))), calc(100vw - 440px));
+    width: min(calc(100dvh - 6px - max(24px, env(safe-area-inset-bottom))), calc(100vw - 440px));
   }
 }
 
