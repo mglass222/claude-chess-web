@@ -29,6 +29,16 @@ small fixed `8px` (no `env()`), giving an even 6px/8px top/bottom gap. The home
 indicator is a translucent overlay, so a small gap below the board reads fine.
 The side panels and portrait stack keep their `env()` safe-area paddings.
 
+Follow-up: rotating portrait→landscape clipped the board until a manual reload.
+iOS Safari doesn't recompute `dvh` / safe-area on orientation change, so the
+phone-landscape layout kept the stale portrait height. Fix: a tiny
+`src/ui/appHeight.js` writes `window.innerHeight` (which *does* update on
+rotation) to a `--app-height` CSS variable on load, `resize`,
+`orientationchange`, and `visualViewport` resize; the phone-landscape
+`#game-layout` height and board-size calc now use `var(--app-height, 100dvh)`
+(dvh stays as the first-paint fallback). Verified portrait→landscape→portrait
+with no reload: the layout tracks the live viewport, no clipping.
+
 ### Fix — portrait clocks no longer overlap the player names
 
 In portrait timed games the clock (absolutely positioned at `right: 0`) sat on
