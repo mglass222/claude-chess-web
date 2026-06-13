@@ -23,6 +23,12 @@ iOS); guarded the portrait stack against the cover change by padding
 Verified at 844×390 (16px bottom gap, no clipping, no page scroll) and
 portrait 390×844 (no regression).
 
+Follow-up: reserving the full safe-area inset pushed the board ~21px up on
+iOS, which read as too much empty space. The board's bottom clearance is now a
+small fixed `8px` (no `env()`), giving an even 6px/8px top/bottom gap. The home
+indicator is a translucent overlay, so a small gap below the board reads fine.
+The side panels and portrait stack keep their `env()` safe-area paddings.
+
 ### Fix — portrait clocks no longer overlap the player names
 
 In portrait timed games the clock (absolutely positioned at `right: 0`) sat on
