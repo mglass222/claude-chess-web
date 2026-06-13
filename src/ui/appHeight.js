@@ -8,7 +8,12 @@
 // runs, which is correct on first load — only rotation is stale).
 export function installAppHeight() {
   const update = () => {
-    document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
+    // Prefer visualViewport.height — it tracks the actually-visible area
+    // (dynamic browser chrome sliding in/out), so the visualViewport resize
+    // listener below actually changes the value. Fall back to innerHeight
+    // where visualViewport is unavailable.
+    const height = window.visualViewport?.height ?? window.innerHeight;
+    document.documentElement.style.setProperty('--app-height', `${Math.round(height)}px`);
   };
 
   update();
