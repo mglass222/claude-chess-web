@@ -219,6 +219,9 @@ body::after {
     border-left: none;
     border-top: 1px solid var(--glass-border);
     max-height: 200px;
+    /* viewport-fit=cover lets the page extend under the home indicator; keep
+       the move list clear of it at the bottom of the portrait stack. */
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
   }
   #board-area {
     width: min(90vw, calc(100vh - 240px));
@@ -284,7 +287,9 @@ body::after {
     order: 0;
     border-right: 1px solid var(--glass-border);
     border-bottom: none;
-    padding: 8px 4px;
+    /* match the board's bottom clearance so scrolled content clears the
+       home indicator / browser chrome */
+    padding: 8px 4px max(8px, env(safe-area-inset-bottom));
     gap: 4px;
     overflow-y: auto;
   }
@@ -292,6 +297,7 @@ body::after {
     max-height: none;
     border-top: none;
     border-left: 1px solid var(--glass-border);
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
   }
   /* The board fills the viewport height; the player banners move from above/
      below it into a slim column on its right (opponent top, player bottom —
@@ -307,7 +313,10 @@ body::after {
     column-gap: 10px;
     align-items: stretch;
     justify-content: center;
-    padding: 6px 0;
+    /* Leave clearance at the bottom for the phone's home indicator / browser
+       chrome so the board and the lower clock aren't clipped. env() resolves
+       to 0 without viewport-fit=cover, so the 16px floor always applies. */
+    padding: 6px 0 max(16px, env(safe-area-inset-bottom));
   }
   #board-row {
     grid-area: board;
@@ -326,12 +335,13 @@ body::after {
     min-height: 0;
     padding: 0;
   }
-  /* Height term: viewport minus #board-column's vertical padding (~24px).
+  /* Height term: viewport minus #board-column's vertical padding (6px top +
+     the safe-area-aware bottom clearance above).
      Width term: viewport minus left panel 120px + right panel 150px +
      eval bar ~24px + player-name column up to 120px + column gaps ≈ 440px. */
   #board-area {
-    width: min(calc(100vh - 24px), calc(100vw - 440px));
-    width: min(calc(100dvh - 24px), calc(100vw - 440px));
+    width: min(calc(100vh - 6px - max(16px, env(safe-area-inset-bottom))), calc(100vw - 440px));
+    width: min(calc(100dvh - 6px - max(16px, env(safe-area-inset-bottom))), calc(100vw - 440px));
   }
 }
 
